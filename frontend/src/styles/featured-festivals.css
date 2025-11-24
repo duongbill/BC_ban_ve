@@ -1,0 +1,231 @@
+/* ============================================
+   FEATURED FESTIVALS SECTION
+   ============================================ */
+
+.featured-festivals {
+  margin: 4rem 0;
+  padding: 3rem 0;
+}
+
+/* Festivals Container - Horizontal Scroll */
+.festivals-container {
+  display: flex;
+  overflow-x: auto;
+  gap: 20px;
+  padding: 2rem 0;
+  scroll-behavior: smooth;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Hide scrollbar but keep functionality */
+.festivals-container::-webkit-scrollbar {
+  height: 8px;
+}
+
+.festivals-container::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 4px;
+}
+
+.festivals-container::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 4px;
+}
+
+.festivals-container::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.3);
+}
+
+/* Festival Card - Poster Style */
+.festival-card {
+  position: relative;
+  min-width: 280px;
+  width: 280px;
+  aspect-ratio: 2 / 3;
+  border-radius: 12px;
+  overflow: hidden;
+  cursor: pointer;
+  transition: transform 0.3s ease, box-shadow 0.3s ease;
+  flex-shrink: 0;
+  
+  /* Background image */
+  background-image: url('/trai.png');
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+}
+
+.festival-card:hover {
+  transform: translateY(-8px) scale(1.02);
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.5);
+}
+
+/* Card Info - Always Visible at Bottom */
+.card-info {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  padding: 1rem 1.25rem;
+  background: linear-gradient(to top, rgba(0, 0, 0, 0.9) 0%, rgba(0, 0, 0, 0.6) 70%, transparent 100%);
+  z-index: 1;
+  transition: opacity 0.3s ease;
+}
+
+.festival-card:hover .card-info {
+  opacity: 0;
+}
+
+.festival-name {
+  font-size: 1.25rem;
+  font-weight: 800;
+  color: #ffffff;
+  margin: 0 0 0.5rem 0;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  font-family: 'Space Grotesk', 'Inter', sans-serif;
+}
+
+.festival-symbol {
+  display: inline-block;
+  padding: 0.25rem 0.75rem;
+  background: rgba(255, 255, 255, 0.2);
+  backdrop-filter: blur(10px);
+  border-radius: 20px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: #ffffff;
+  margin-bottom: 0.75rem;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+}
+
+.festival-stats {
+  display: flex;
+  gap: 1rem;
+  font-size: 0.875rem;
+  color: rgba(255, 255, 255, 0.8);
+  font-family: 'Inter', sans-serif;
+}
+
+.festival-stats span {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+/* Card Overlay - Hidden by default, shown on hover */
+.card-overlay {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: linear-gradient(to top, rgba(0, 0, 0, 0.95) 0%, rgba(0, 0, 0, 0.7) 50%, transparent 100%);
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  padding: 1.25rem;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.3s ease, visibility 0.3s ease;
+  z-index: 2;
+}
+
+.festival-card:hover .card-overlay {
+  opacity: 1;
+  visibility: visible;
+}
+
+/* Buttons Container */
+.card-buttons {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  width: 100%;
+}
+
+/* Button Styles */
+.btn-view-details,
+.btn-buy-ticket {
+  width: 100%;
+  padding: 0.875rem 1.5rem;
+  border: none;
+  border-radius: 8px;
+  font-size: 0.875rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  font-family: 'Space Grotesk', 'Inter', sans-serif;
+  position: relative;
+  overflow: hidden;
+}
+
+.btn-view-details {
+  background-color: #000000;
+    color: black;
+    border: none;
+    padding: 12px 32px;
+    border-radius: 20px;
+    font-size: 15px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s 
+ease;
+    box-shadow: 0 2px 8px rgba(255, 255, 255, 0.2);
+}
+
+
+.btn-view-details:hover {
+    background-color: #2d2d2d;
+    transform: scale(1.05);
+    box-shadow: 0 4px 12px rgba(255, 255, 255, 0.3);
+}
+
+.btn-buy-ticket {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: #ffffff;
+  border: 2px solid transparent;
+  box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
+}
+
+.btn-buy-ticket:hover {
+  background: linear-gradient(135deg, #764ba2 0%, #667eea 100%);
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(102, 126, 234, 0.6);
+}
+
+/* Button Click Effect */
+.btn-view-details:active,
+.btn-buy-ticket:active {
+  transform: translateY(0);
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+  .festival-card {
+    min-width: 240px;
+    width: 240px;
+  }
+
+  .card-info {
+    padding: 1rem;
+  }
+
+  .festival-name {
+    font-size: 1rem;
+  }
+
+  .festival-stats {
+    font-size: 0.75rem;
+  }
+}
+
+/* Accessibility */
+.btn-view-details:focus,
+.btn-buy-ticket:focus {
+  outline: 2px solid #667eea;
+  outline-offset: 2px;
+}
+
+
