@@ -20,32 +20,20 @@ export interface UploadMetadataParams {
  */
 export async function uploadMetadata(data: UploadMetadataParams): Promise<string> {
   try {
-    // Validate input
-    if (!data.name || !data.description || !data.image) {
-      throw new Error('Name, description, and image are required');
-    }
-
-    // Create metadata object
-    const metadata: TicketMetadata = {
+    const result = await client.store({
       name: data.name,
       description: data.description,
-      image: '', // Will be set after image upload
-      attributes: data.attributes || [],
-    };
-
-    // Upload to NFT.Storage
-    const result = await client.store({
-      ...metadata,
       image: data.image,
+      attributes: data.attributes || [],
     });
-
-    // Return the metadata URI
     return result.url;
-  } catch (error) {
-    console.error('Error uploading to IPFS:', error);
-    throw new Error('Failed to upload metadata to IPFS');
+  } catch (error: any) {
+    console.error("FULL IPFS ERROR:", error);
+    console.error("IPFS error message:", error.message);
+    throw new Error("Failed to upload metadata to IPFS");
   }
 }
+
 
 /**
  * Upload just an image to IPFS

@@ -11,36 +11,43 @@ import toast from "react-hot-toast";
 import "../styles/festival-page.css";
 
 // Mock data - in real app this would fetch from blockchain
+// Use deployed contract addresses from environment variables for localhost testing
+const DEPLOYED_NFT_ADDRESS = import.meta.env.VITE_NFT_ADDRESS || "0x0000000000000000000000000000000000000000";
+const DEPLOYED_MARKETPLACE_ADDRESS = import.meta.env.VITE_MARKETPLACE_ADDRESS || "0x0000000000000000000000000000000000000000";
+const DEPLOYED_ORGANISER_ADDRESS = import.meta.env.VITE_ORGANISER_ADDRESS || "0x0000000000000000000000000000000000000000";
+
 const mockFestival: Festival = {
   id: "1",
   name: "Đêm Nhạc Sài Gòn 2025",
   symbol: "SGM",
-  nftContract: "0x1234...",
-  marketplace: "0x5678...",
-  organiser: "0xabcd...",
+  nftContract: DEPLOYED_NFT_ADDRESS,
+  marketplace: DEPLOYED_MARKETPLACE_ADDRESS,
+  organiser: DEPLOYED_ORGANISER_ADDRESS,
   totalTickets: 1000,
   ticketsForSale: 250,
 };
 
+// Note: for secondary market testing, we use placeholder tokenIds and addresses
+// In production, these would be fetched from blockchain events
 const mockSecondaryTickets: Ticket[] = [
   {
     id: "1",
     tokenId: 1,
-    tokenURI: "ipfs://...",
+    tokenURI: "ipfs://QmExample1",
     purchasePrice: "50",
     sellingPrice: "55",
     isForSale: true,
-    owner: "0xdef...",
+    owner: "0x0000000000000000000000000000000000000001",
     festival: mockFestival,
   },
   {
     id: "2",
     tokenId: 2,
-    tokenURI: "ipfs://...",
+    tokenURI: "ipfs://QmExample2",
     purchasePrice: "75",
     sellingPrice: "80",
     isForSale: true,
-    owner: "0x123...",
+    owner: "0x0000000000000000000000000000000000000002",
     festival: mockFestival,
   },
 ];
@@ -89,7 +96,7 @@ export function FestivalPage() {
     }
 
     try {
-      await buyTicketMutation.mutateAsync({
+      const result = await buyTicketMutation.mutateAsync({
         nftAddress: festival.nftContract,
         marketplaceAddress: festival.marketplace,
         tokenAddress: import.meta.env.VITE_FEST_TOKEN_ADDRESS,
@@ -100,9 +107,10 @@ export function FestivalPage() {
           image: ticketData.image,
         },
       });
-
+      console.log("Ticket purchased:", result);
       setShowBuyModal(false);
-      setTicketData({ name: "", description: "", price: "", image: null });
+      setTicketData({ name: "", description: "", price: "", image: null }); 
+      
     } catch (error) {
       console.error("Error buying ticket:", error);
     }

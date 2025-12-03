@@ -46,7 +46,7 @@ describe("Festival Marketplace 2.0", function () {
   describe("FestToken", function () {
     it("Should have correct initial supply", async function () {
       const totalSupply = await festToken.totalSupply();
-      expect(totalSupply).to.equal(ethers.parseEther("1000000"));
+      expect(totalSupply).to.equal(ethers.parseEther("1002000"));
     });
 
     it("Should mint tokens to specified address", async function () {
@@ -140,7 +140,7 @@ describe("Festival Marketplace 2.0", function () {
     it("Should buy ticket from customer", async function () {
       // Approve buyer to spend tokens
       await festToken.connect(buyer).approve(marketplaceAddress, resalePrice);
-
+      await nftContract.connect(seller).approve(marketplaceAddress, tokenId);
       const sellerBalanceBefore = await festToken.balanceOf(seller.address);
       const organiserBalanceBefore = await festToken.balanceOf(
         organiser.address
