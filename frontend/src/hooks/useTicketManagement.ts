@@ -1,4 +1,4 @@
-import { useMutation } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useWriteContract, usePublicClient, useAccount } from 'wagmi';
 import { parseEther } from 'viem';
 import toast from 'react-hot-toast';
@@ -127,6 +127,7 @@ const NFT_ABI = [
 export function useListTicketForSale() {
   const { writeContractAsync } = useWriteContract();
   const publicClient = usePublicClient();
+  const queryClient = useQueryClient();
 
   return useMutation({
     mutationFn: async ({
@@ -157,17 +158,28 @@ export function useListTicketForSale() {
       return { hash };
     },
     onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['myTickets'] });
       toast.success('✅ Đã niêm yết vé thành công!');
     },
     onError: (error: any) => {
       console.error('List ticket error:', error);
-      if (error.message?.includes('User rejected')) {
-        toast.error('❌ Bạn đã từ chối giao dịch');
-      } else if (error.message?.includes('exceeds 110%')) {
-        toast.error('❌ Giá vượt quá 110% giá gốc');
-      } else {
-        toast.error('❌ Niêm yết vé thất bại');
+      let errorMessage = '❌ Niêm yết vé thất bại';
+      
+      if (error?.message?.includes('User rejected') || error?.message?.includes('user rejected')) {
+        errorMessage = '❌ Bạn đã từ chối giao dịch';
+      } else if (error?.message?.includes('exceeds 110%') || error?.message?.includes('Price exceeds 110%')) {
+        errorMessage = '❌ Giá vượt quá 110% giá gốc';
+      } else if (error?.message?.includes('Not authorized') || error?.message?.includes('not authorized')) {
+        errorMessage = '❌ Bạn không có quyền bán vé này. Đảm bảo bạn là chủ sở hữu vé.';
+      } else if (error?.message?.includes('Event not active')) {
+        errorMessage = '❌ Sự kiện không còn active. Không thể bán vé.';
+      } else if (error?.message?.includes('already used') || error?.message?.includes('Ticket already used')) {
+        errorMessage = '❌ Vé đã được sử dụng. Không thể bán vé đã sử dụng.';
+      } else if (error?.message) {
+        errorMessage = `❌ ${error.message}`;
       }
+      
+      toast.error(errorMessage);
     },
   });
 }
@@ -178,6 +190,7 @@ export function useListTicketForSale() {
 export function useUnlistTicket() {
   const { writeContractAsync } = useWriteContract();
   const publicClient = usePublicClient();
+  const queryClient = useQueryClient();
 
   return useMutation({
     mutationFn: async ({
@@ -204,6 +217,7 @@ export function useUnlistTicket() {
       return { hash };
     },
     onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['myTickets'] });
       toast.success('✅ Đã gỡ vé khỏi chợ!');
     },
     onError: (error: any) => {
@@ -223,6 +237,7 @@ export function useUnlistTicket() {
 export function useGiftTicket() {
   const { writeContractAsync } = useWriteContract();
   const publicClient = usePublicClient();
+  const queryClient = useQueryClient();
 
   return useMutation({
     mutationFn: async ({
@@ -251,6 +266,7 @@ export function useGiftTicket() {
       return { hash };
     },
     onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['myTickets'] });
       toast.success('🎁 Đã tặng vé thành công!');
     },
     onError: (error: any) => {
@@ -318,82 +334,117 @@ export function useVerifyTicket() {
 }
 
 /**
- * Hook to fetch user's tickets
+ * Hook to fetch user's tickets - Now using Query for real-time updates
+ * This uses Blockchain Query (Critical/Real-time Data) pattern
  */
 export function useMyTickets(nftAddress: string, userAddress: string | undefined) {
   const publicClient = usePublicClient();
 
-  return useMutation({
-    mutationFn: async () => {
-      if (!userAddress || !publicClient) {
+  return useQuery({
+    queryKey: ['myTickets', nftAddress, userAddress],
+    queryFn: async () => {
+      if (!userAddress || !publicClient || !nftAddress) {
         return [];
       }
 
-      // Get token IDs owned by user
-      const tokenIds = await publicClient.readContract({
-        address: nftAddress as `0x${string}`,
-        abi: NFT_ABI,
-        functionName: 'getTicketsOwnedBy',
-        args: [userAddress as `0x${string}`],
-      }) as bigint[];
+      try {
+        console.log('🔍 Fetching tickets for:', {
+          nftAddress,
+          userAddress,
+          publicClientExists: !!publicClient
+        });
 
-      // Fetch details for each token
-      const tickets = await Promise.all(
-        tokenIds.map(async (tokenId) => {
-          const [tokenURI, purchasePrice, isForSale, sellingPrice, isGifted, isVerified] = await Promise.all([
-            publicClient.readContract({
-              address: nftAddress as `0x${string}`,
-              abi: NFT_ABI,
-              functionName: 'tokenURI',
-              args: [tokenId],
-            }) as Promise<string>,
-            publicClient.readContract({
-              address: nftAddress as `0x${string}`,
-              abi: NFT_ABI,
-              functionName: 'getTicketPurchasePrice',
-              args: [tokenId],
-            }) as Promise<bigint>,
-            publicClient.readContract({
-              address: nftAddress as `0x${string}`,
-              abi: NFT_ABI,
-              functionName: 'isTicketForSale',
-              args: [tokenId],
-            }) as Promise<boolean>,
-            publicClient.readContract({
-              address: nftAddress as `0x${string}`,
-              abi: NFT_ABI,
-              functionName: 'getTicketSellingPrice',
-              args: [tokenId],
-            }) as Promise<bigint>,
-            publicClient.readContract({
-              address: nftAddress as `0x${string}`,
-              abi: NFT_ABI,
-              functionName: 'isTicketGifted',
-              args: [tokenId],
-            }) as Promise<boolean>,
-            publicClient.readContract({
-              address: nftAddress as `0x${string}`,
-              abi: NFT_ABI,
-              functionName: 'isTicketVerified',
-              args: [tokenId],
-            }) as Promise<boolean>,
-          ]);
+        // Get token IDs owned by user
+        const tokenIds = await publicClient.readContract({
+          address: nftAddress as `0x${string}`,
+          abi: NFT_ABI,
+          functionName: 'getTicketsOwnedBy',
+          args: [userAddress as `0x${string}`],
+        }) as bigint[];
 
-          return {
-            tokenId: Number(tokenId),
-            tokenURI,
-            purchasePrice: purchasePrice.toString(),
-            isForSale,
-            sellingPrice: sellingPrice.toString(),
-            isGifted,
-            isVerified,
-            owner: userAddress,
-          };
-        })
-      );
+        console.log('🎫 Token IDs found:', tokenIds);
 
-      return tickets;
+        if (!tokenIds || tokenIds.length === 0) {
+          console.log('ℹ️ No tickets found for user');
+          return [];
+        }
+
+        // Fetch details for each token
+        const tickets = await Promise.all(
+          tokenIds.map(async (tokenId) => {
+            const [tokenURI, purchasePrice, isForSale, sellingPrice, isGifted, isVerified] = await Promise.all([
+              publicClient.readContract({
+                address: nftAddress as `0x${string}`,
+                abi: NFT_ABI,
+                functionName: 'tokenURI',
+                args: [tokenId],
+              }) as Promise<string>,
+              publicClient.readContract({
+                address: nftAddress as `0x${string}`,
+                abi: NFT_ABI,
+                functionName: 'getTicketPurchasePrice',
+                args: [tokenId],
+              }) as Promise<bigint>,
+              publicClient.readContract({
+                address: nftAddress as `0x${string}`,
+                abi: NFT_ABI,
+                functionName: 'isTicketForSale',
+                args: [tokenId],
+              }) as Promise<boolean>,
+              publicClient.readContract({
+                address: nftAddress as `0x${string}`,
+                abi: NFT_ABI,
+                functionName: 'getTicketSellingPrice',
+                args: [tokenId],
+              }) as Promise<bigint>,
+              publicClient.readContract({
+                address: nftAddress as `0x${string}`,
+                abi: NFT_ABI,
+                functionName: 'isTicketGifted',
+                args: [tokenId],
+              }) as Promise<boolean>,
+              publicClient.readContract({
+                address: nftAddress as `0x${string}`,
+                abi: NFT_ABI,
+                functionName: 'isTicketVerified',
+                args: [tokenId],
+              }) as Promise<boolean>,
+            ]);
+
+            return {
+              tokenId: Number(tokenId),
+              tokenURI,
+              purchasePrice: purchasePrice.toString(),
+              isForSale,
+              sellingPrice: sellingPrice.toString(),
+              isGifted,
+              isVerified,
+              owner: userAddress,
+            };
+          })
+        );
+
+        console.log('✅ Successfully fetched tickets:', tickets.length);
+        return tickets;
+      } catch (error: any) {
+        console.error('❌ Error fetching tickets from blockchain:', error);
+        // Log more details about the error
+        if (error?.message) {
+          console.error('Error message:', error.message);
+        }
+        if (error?.cause) {
+          console.error('Error cause:', error.cause);
+        }
+        return [];
+      }
     },
+    enabled: !!(userAddress && publicClient && nftAddress),
+    // Real-time polling: refetch every 5 seconds to catch new purchases
+    refetchInterval: 5000,
+    // Also refetch when window regains focus
+    refetchOnWindowFocus: true,
+    // Refetch when network reconnects
+    refetchOnReconnect: true,
   });
 }
 
