@@ -79,14 +79,28 @@ Sau khi deploy xong, địa chỉ contracts sẽ được lưu vào `deployedAdd
 1. Mở MetaMask
 2. Thêm network mới với thông tin:
 
-   - **Network Name**: Hardhat Local
+   - **Network Name**: `Hardhat Local` (hoặc tên bất kỳ)
    - **RPC URL**: `http://127.0.0.1:8545`
-   - **Chain ID**: `31337`
-   - **Currency Symbol**: ETH
+   - **Chain ID**: `31337` ⚠️ **QUAN TRỌNG: Phải là 31337, không phải 1337**
+   - **Currency Symbol**: `ETH`
 
 3. Import account để test:
-   - Copy private key từ terminal Hardhat node (Account #0, #1, v.v.)
+
+   - **Account #1** (Organiser - có FEST tokens):
+     - Address: `0x70997970C51812dc3A010C7d01b50e0d17dc79C8`
+     - Private key: `0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d`
+     - **✅ Dùng account này để mua vé** (có 10,000 FEST tokens)
+   - **Account #0** (Deployer):
+     - Address: `0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266`
+     - Private key: `0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80`
    - MetaMask → Import Account → Paste private key
+
+4. Thêm FEST Token vào MetaMask:
+   - Click "Import tokens" trong MetaMask
+   - Token Contract Address: Lấy từ `deployedAddresses.json` → `FestToken`
+   - Token Symbol: `FEST`
+   - Token Decimal: `18`
+   - Account #1 sẽ hiển thị 10,000 FEST
 
 ### 6. Khởi động Frontend
 
@@ -99,27 +113,82 @@ npm run dev
 
 Truy cập: `http://localhost:5173`
 
-### 7. Test Flow đầy đủ
+### 7. Test Flow mua vé
 
-1. **Kết nối ví**: Click "Kết nối ví" và chọn MetaMask
-2. **Xem danh sách sự kiện**: HomePage hiển thị các sự kiện mẫu
-3. **Xem chi tiết**: Click vào poster sự kiện
-4. **Mua vé**: Test chức năng mua vé (nếu đã implement)
-5. **Kiểm tra giao dịch**: Xem transactions trong MetaMask
+1. **Kết nối ví**:
+
+   - Click "Kết nối ví" và chọn MetaMask
+   - Chọn Account #1 (`0x70997970...C8`) - account có FEST tokens
+   - Đảm bảo network là "Hardhat Local" (Chain ID 31337)
+
+2. **Xem danh sách sự kiện**:
+
+   - HomePage hiển thị "Summer Music Fest"
+
+3. **Xem chi tiết**:
+
+   - Click vào festival card
+
+4. **Mua vé sơ cấp**:
+
+   - Click "Mua vé sơ cấp"
+   - Chọn loại vé: VIP (100 FEST), Standard (50 FEST), Early Bird (40 FEST), hoặc Student (35 FEST)
+   - Click "Mua vé"
+   - **Xác nhận 2 transactions trong MetaMask**:
+     - Transaction 1: Approve FEST tokens cho marketplace
+     - Transaction 2: Mua vé từ organiser
+   - Đợi confirmation (~2-3 giây cho mỗi transaction)
+   - Thấy toast "🎉 Vé đã được mua thành công!"
+
+5. **Kiểm tra vé đã mua**:
+   - Vào trang "Vé của tôi"
+   - Xem NFT ticket vừa mua
 
 ### 8. Debug & Troubleshooting
 
-```bash
-# Xem logs của Hardhat node
-# (Terminal đang chạy npx hardhat node)
+**Nếu gặp lỗi "ERR_CONNECTION_REFUSED":**
 
-# Reset local blockchain nếu cần
-# Ctrl+C để dừng hardhat node, sau đó chạy lại:
+```bash
+# Hardhat node không chạy
+# Mở terminal và start lại:
+npx hardhat node
+```
+
+**Nếu gặp lỗi "returned no data (0x)":**
+
+```bash
+# Contracts chưa deploy hoặc node bị reset
+# Deploy lại contracts:
+npx hardhat run scripts/deploy.js --network localhost
+node scripts/update-env.js
+
+# Sau đó restart frontend để load .env mới
+cd frontend
+npm run dev
+```
+
+**Nếu MetaMask báo "Internal JSON-RPC error" khi approve:**
+
+- Kiểm tra Chain ID = 31337 (không phải 1337)
+- Kiểm tra account có đủ FEST tokens (10,000 FEST)
+- Restart MetaMask và refresh trang
+
+**Reset local blockchain nếu cần:**
+
+```bash
+# Ctrl+C để dừng hardhat node
+# Chạy lại với --reset:
 npx hardhat node --reset
 
-# Xem console logs của frontend
-# Mở DevTools (F12) trong browser
+# Deploy lại contracts
+npx hardhat run scripts/deploy.js --network localhost
+node scripts/update-env.js
 ```
+
+**Xem console logs:**
+
+- Mở DevTools (F12) trong browser
+- Tab Console sẽ hiển thị debug info khi mua vé
 
 ## 🎯 Tính năng chính
 
@@ -134,11 +203,14 @@ npx hardhat node --reset
 
 ### Tính năng Frontend
 
-- **Tích hợp Web3**: Kết nối với MetaMask/WalletConnect
-- **Giao dịch không phí gas**: Biconomy Smart Accounts
-- **Lưu trữ IPFS**: Lưu metadata phi tập trung
-- **Thiết kế responsive**: Giao diện mobile-first
-- **Cập nhật realtime**: Tích hợp React Query
+- **Tích hợp Web3**: Kết nối với MetaMask qua RainbowKit
+- **Wagmi v2**: React hooks cho blockchain interactions
+- **Mock IPFS**: Local testing không cần API key
+- **Thiết kế responsive**: Giao diện mobile-first với Tailwind CSS
+- **Cập nhật realtime**: Tích hợp TanStack React Query
+- **Ticket Selection UI**: Chọn loại vé từ 4 options có sẵn (VIP, Standard, Early Bird, Student)
+- **Balance Check**: Tự động kiểm tra số dư FEST trước khi mua
+- **Transaction Waiting**: Đợi transaction confirmation thực sự thay vì timeout
 
 ## 📝 Hướng dẫn sử dụng
 
@@ -151,22 +223,61 @@ npx hardhat node --reset
 
 ### Mua vé sơ cấp
 
-1. Duyệt danh sách sự kiện
-2. Click "Mua vé"
-3. Upload ảnh vé và metadata
-4. Xác nhận giao dịch không phí gas
+1. Kết nối MetaMask với Account #1 (có FEST tokens)
+2. Vào trang festival detail
+3. Click "Mua vé sơ cấp"
+4. Chọn loại vé: VIP (100 FEST), Standard (50 FEST), Early Bird (40 FEST), hoặc Student (35 FEST)
+5. Hook `useBuyTicket` sẽ:
+   - Check balance (đảm bảo đủ FEST)
+   - Upload metadata lên IPFS (mock mode)
+   - Approve FEST tokens cho marketplace (transaction 1)
+   - Đợi approve confirmation
+   - Mua vé từ organiser (transaction 2)
+   - Đợi buy confirmation
+6. Xác nhận cả 2 transactions trong MetaMask
+7. NFT ticket sẽ được mint cho buyer
 
 ### Thị trường thứ cấp
 
 1. Đăng vé để bán (≤ 110% giá gốc)
 2. Duyệt vé thứ cấp có sẵn
-3. Mua vé với hoa hồng tự động
+3. Mua vé với hoa hồng tự động (phí sàn 10%)
 
-### Lợi ích Smart Account
+## 🔑 Thông tin quan trọng
 
-- **Không phí gas**: Biconomy trả phí gas
-- **Giao dịch hàng loạt**: Approve + Mua trong một thao tác
-- **Trải nghiệm tốt**: Không lo phí gas
+### Local Development Addresses
+
+**Hardhat Accounts (có sẵn sau khi chạy `npx hardhat node`):**
+
+- Account #0 (Deployer): `0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266`
+- Account #1 (Organiser): `0x70997970C51812dc3A010C7d01b50e0d17dc79C8` ⭐ **Dùng account này để test**
+
+**Contract Addresses** (thay đổi sau mỗi lần deploy):
+
+- Xem file `deployedAddresses.json` sau khi deploy
+- Hoặc xem output của `npx hardhat run scripts/deploy.js`
+
+**Network Config:**
+
+- RPC URL: `http://127.0.0.1:8545`
+- Chain ID: `31337` (Hardhat default)
+- Currency: ETH
+
+### Token Information
+
+**FEST Token (ERC20):**
+
+- Decimals: 18
+- Initial Supply: Minted theo deploy script
+- Account #0: 10,000 FEST
+- Account #1: 10,000 FEST (organiser)
+
+**Ticket Types:**
+
+- VIP: 100 FEST
+- Standard: 50 FEST
+- Early Bird: 40 FEST
+- Student: 35 FEST
 
 ## 🔧 Phát triển
 
@@ -366,4 +477,5 @@ MIT License - see LICENSE file
 - Vũ Hoàng Anh
 
 ---
+
 # BC_ban_ve

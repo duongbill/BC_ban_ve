@@ -1,5 +1,5 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { useWaitForTransactionReceipt, useWriteContract } from 'wagmi';
+import { useWaitForTransactionReceipt, useWriteContract, usePublicClient } from 'wagmi';
 import { parseEther, encodeFunctionData } from 'viem';
 import { useBiconomyAccount } from './useBiconomyAccount';
 import { uploadMetadata } from '@/services/ipfs';
@@ -56,6 +56,17 @@ const FEST_TOKEN_ABI = [
       { name: 'spender', type: 'address' },
       { name: 'amount', type: 'uint256' }
     ]
+  },
+  {
+    name: 'balanceOf',
+    type: 'function',
+    stateMutability: 'view',
+    inputs: [
+      { name: 'account', type: 'address' }
+    ],
+    outputs: [
+      { name: '', type: 'uint256' }
+    ]
   }
 ] as const;
 
@@ -96,9 +107,10 @@ export function useCreateFestival() {
   });
 }
 
-// Hook for buying tickets with Biconomy batch transactions
+// Hook for buying tickets - Improved version with balance check and transaction waiting
 export function useBuyTicket() {
-  const { smartAccount, smartAccountAddress } = useBiconomyAccount();
+  const { writeContractAsync } = useWriteContract();
+  const publicClient = usePublicClient();
   const queryClient = useQueryClient();
 
   return useMutation({
@@ -107,72 +119,137 @@ export function useBuyTicket() {
       marketplaceAddress,
       tokenAddress,
       price,
-      ticketData
+      ticketData,
+      buyerAddress
     }: {
       nftAddress: string;
       marketplaceAddress: string;
       tokenAddress: string;
       price: string;
+      buyerAddress: string;
       ticketData: {
         name: string;
         description: string;
         image: File;
       };
     }) => {
-      if (!smartAccount || !smartAccountAddress) {
-        throw new Error('Smart account not initialized');
-      }
-
-      // 1. Upload metadata to IPFS
-      const tokenURI = await uploadMetadata(ticketData);
-
-      // 2. Create batch transaction data
-      const approveData = encodeFunctionData({
-        abi: FEST_TOKEN_ABI,
-        functionName: 'approve',
-        args: [marketplaceAddress as `0x${string}`, parseEther(price)]
-      });
-
-      const buyData = encodeFunctionData({
-        abi: MARKETPLACE_ABI,
-        functionName: 'buyFromOrganiser',
-        args: [
-          nftAddress as `0x${string}`,
-          smartAccountAddress as `0x${string}`,
-          tokenURI,
-          parseEther(price)
-        ]
-      });
-
-      // 3. Create user operation with batch transactions
-      const userOp = await smartAccount.buildUserOp([
-        {
-          to: tokenAddress,
-          data: approveData,
-          value: '0'
-        },
-        {
-          to: marketplaceAddress,
-          data: buyData,
-          value: '0'
+      try {
+        const priceInWei = parseEther(price);
+        
+        console.log('🔍 Debug Info:', {
+          tokenAddress,
+          marketplaceAddress,
+          buyerAddress,
+          price,
+          priceInWei: priceInWei.toString(),
+          publicClientExists: !!publicClient
+        });
+        
+        // 0. Check balance first
+        if (!publicClient) {
+          throw new Error('Không thể kết nối với blockchain. Vui lòng kiểm tra MetaMask.');
         }
-      ]);
+        
+        toast.loading('Đang kiểm tra số dư...');
+        const balance = await publicClient.readContract({
+          address: tokenAddress as `0x${string}`,
+          abi: FEST_TOKEN_ABI,
+          functionName: 'balanceOf',
+          args: [buyerAddress as `0x${string}`]
+        }) as bigint;
+        
+        console.log('💰 Balance check:', {
+          balance: balance.toString(),
+          balanceInFEST: Number(balance) / 1e18,
+          required: price
+        });
+        
+        if (!balance || balance < priceInWei) {
+          toast.dismiss();
+          throw new Error(`Không đủ FEST tokens. Cần ${price} FEST, chỉ có ${Number(balance) / 1e18} FEST`);
+        }
+        toast.dismiss();
+        
+        // 1. Upload metadata to IPFS
+        toast.loading('Đang tải metadata lên IPFS...');
+        const tokenURI = await uploadMetadata(ticketData);
+        toast.dismiss();
+        toast.success('Metadata đã được tải lên!');
+        
+        // 2. Approve FestToken spending
+        toast.loading('Đang approve tokens... Vui lòng xác nhận trong MetaMask');
+        const approveHash = await writeContractAsync({
+          address: tokenAddress as `0x${string}`,
+          abi: FEST_TOKEN_ABI,
+          functionName: 'approve',
+          args: [marketplaceAddress as `0x${string}`, priceInWei]
+        });
+        
+        // Wait for approval transaction to be mined
+        toast.loading('Đang chờ approve transaction được xác nhận...');
+        const approveReceipt = await publicClient?.waitForTransactionReceipt({
+          hash: approveHash
+        });
+        
+        if (!approveReceipt || approveReceipt.status !== 'success') {
+          throw new Error('Approve transaction thất bại');
+        }
+        toast.dismiss();
+        toast.success('Tokens đã được approve!');
 
-      // 4. Send user operation
-      const userOpResponse = await smartAccount.sendUserOp(userOp);
-      
-      // 5. Wait for transaction to be mined
-      const receipt = await userOpResponse.wait();
-      
-      return { receipt, tokenURI };
+        // 3. Buy ticket from organiser
+        toast.loading('Đang mua vé... Vui lòng xác nhận trong MetaMask');
+        const buyHash = await writeContractAsync({
+          address: marketplaceAddress as `0x${string}`,
+          abi: MARKETPLACE_ABI,
+          functionName: 'buyFromOrganiser',
+          args: [
+            nftAddress as `0x${string}`,
+            buyerAddress as `0x${string}`,
+            tokenURI,
+            priceInWei
+          ]
+        });
+        
+        // Wait for buy transaction to be mined
+        toast.loading('Đang chờ buy transaction được xác nhận...');
+        const buyReceipt = await publicClient?.waitForTransactionReceipt({
+          hash: buyHash
+        });
+        
+        if (!buyReceipt || buyReceipt.status !== 'success') {
+          throw new Error('Buy transaction thất bại');
+        }
+        toast.dismiss();
+        
+        return { buyHash, tokenURI, approveHash };
+      } catch (error: any) {
+        toast.dismiss();
+        console.error('Error in useBuyTicket:', error);
+        
+        // Better error messages
+        let errorMessage = 'Không thể mua vé';
+        if (error?.message?.includes('User rejected')) {
+          errorMessage = 'Bạn đã từ chối giao dịch';
+        } else if (error?.message?.includes('insufficient funds')) {
+          errorMessage = 'Không đủ ETH để trả gas fee';
+        } else if (error?.message?.includes('Không đủ FEST')) {
+          errorMessage = error.message;
+        } else if (error?.message) {
+          errorMessage = error.message;
+        }
+        
+        throw new Error(errorMessage);
+      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['tickets'] });
-      toast.success('Ticket purchased successfully!');
+      toast.success('🎉 Vé đã được mua thành công!');
     },
-    onError: (error) => {
+    onError: (error: any) => {
       console.error('Error buying ticket:', error);
-      toast.error('Failed to purchase ticket');
+      const message = error?.message || 'Không thể mua vé';
+      toast.error(message);
     }
   });
 }

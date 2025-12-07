@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
+import { useAccount } from "wagmi";
 import {
   useBuyTicket,
   useBuySecondaryTicket,
@@ -12,9 +13,15 @@ import "../styles/festival-page.css";
 
 // Mock data - in real app this would fetch from blockchain
 // Use deployed contract addresses from environment variables for localhost testing
-const DEPLOYED_NFT_ADDRESS = import.meta.env.VITE_NFT_ADDRESS || "0x0000000000000000000000000000000000000000";
-const DEPLOYED_MARKETPLACE_ADDRESS = import.meta.env.VITE_MARKETPLACE_ADDRESS || "0x0000000000000000000000000000000000000000";
-const DEPLOYED_ORGANISER_ADDRESS = import.meta.env.VITE_ORGANISER_ADDRESS || "0x0000000000000000000000000000000000000000";
+const DEPLOYED_NFT_ADDRESS =
+  import.meta.env.VITE_NFT_ADDRESS ||
+  "0x0000000000000000000000000000000000000000";
+const DEPLOYED_MARKETPLACE_ADDRESS =
+  import.meta.env.VITE_MARKETPLACE_ADDRESS ||
+  "0x0000000000000000000000000000000000000000";
+const DEPLOYED_ORGANISER_ADDRESS =
+  import.meta.env.VITE_ORGANISER_ADDRESS ||
+  "0x0000000000000000000000000000000000000000";
 
 const mockFestival: Festival = {
   id: "1",
@@ -52,10 +59,93 @@ const mockSecondaryTickets: Ticket[] = [
   },
 ];
 
+// Predefined ticket types
+const TICKET_TYPES = [
+  {
+    id: "vip",
+    name: "VIP Pass",
+    description:
+      "VIP access to all areas including backstage, VIP lounge, and premium seating",
+    price: "100",
+    icon: "👑",
+    color: "linear-gradient(135deg, #FFD700 0%, #FFA500 100%)",
+  },
+  {
+    id: "standard",
+    name: "Standard Ticket",
+    description:
+      "General admission to the festival with access to main stage and food areas",
+    price: "50",
+    icon: "🎫",
+    color: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
+  },
+  {
+    id: "early-bird",
+    name: "Early Bird",
+    description: "Discounted ticket for early supporters with standard access",
+    price: "40",
+    icon: "🐦",
+    color: "linear-gradient(135deg, #f093fb 0%, #f5576c 100%)",
+  },
+  {
+    id: "student",
+    name: "Student Pass",
+    description: "Special discounted rate for students with valid ID",
+    price: "35",
+    icon: "🎓",
+    color: "linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)",
+  },
+];
+
+// Create a simple placeholder image as base64
+const createPlaceholderImage = (color: string): File => {
+  // Create a small canvas
+  const canvas = document.createElement("canvas");
+  canvas.width = 400;
+  canvas.height = 400;
+  const ctx = canvas.getContext("2d");
+
+  if (ctx) {
+    // Fill with gradient
+    const gradient = ctx.createLinearGradient(0, 0, 400, 400);
+    gradient.addColorStop(
+      0,
+      color === "vip"
+        ? "#FFD700"
+        : color === "standard"
+        ? "#667eea"
+        : color === "early-bird"
+        ? "#f093fb"
+        : "#4facfe"
+    );
+    gradient.addColorStop(
+      1,
+      color === "vip"
+        ? "#FFA500"
+        : color === "standard"
+        ? "#764ba2"
+        : color === "early-bird"
+        ? "#f5576c"
+        : "#00f2fe"
+    );
+    ctx.fillStyle = gradient;
+    ctx.fillRect(0, 0, 400, 400);
+  }
+
+  // Convert to blob then file
+  return new File([canvas.toDataURL()], `${color}-ticket.png`, {
+    type: "image/png",
+  });
+};
+
 export function FestivalPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const { address } = useAccount();
   const [showBuyModal, setShowBuyModal] = useState(false);
+  const [selectedTicketType, setSelectedTicketType] = useState<string | null>(
+    null
+  );
   const [ticketData, setTicketData] = useState({
     name: "",
     description: "",
@@ -84,14 +174,88 @@ export function FestivalPage() {
   });
 
   const handleBuyPrimaryTicket = async () => {
+    if (!address) {
+      toast.error("Vui lòng kết nối ví trước");
+      return;
+    }
+
+    if (!selectedTicketType) {
+      toast.error("Vui lòng chọn loại vé");
+      return;
+    }
+
     if (
       !festival ||
       !ticketData.name ||
       !ticketData.description ||
-      !ticketData.price ||
-      !ticketData.image
+      !ticketData.price
     ) {
-      toast.error("Please fill all fields and select an image");
+      toast.error("Vui lòng chọn loại vé");
+      return;
+    }
+
+    // Create a mock image if none provided
+    let imageFile = ticketData.image;
+    if (!imageFile) {
+      // Create a simple canvas-based placeholder
+      const canvas = document.createElement("canvas");
+      canvas.width = 400;
+      canvas.height = 400;
+      const ctx = canvas.getContext("2d");
+
+      if (ctx) {
+        const selectedType = TICKET_TYPES.find(
+          (t) => t.id === selectedTicketType
+        );
+        if (selectedType) {
+          // Simple gradient background
+          const gradient = ctx.createLinearGradient(0, 0, 400, 400);
+          gradient.addColorStop(
+            0,
+            selectedType.id === "vip"
+              ? "#FFD700"
+              : selectedType.id === "standard"
+              ? "#667eea"
+              : selectedType.id === "early-bird"
+              ? "#f093fb"
+              : "#4facfe"
+          );
+          gradient.addColorStop(
+            1,
+            selectedType.id === "vip"
+              ? "#FFA500"
+              : selectedType.id === "standard"
+              ? "#764ba2"
+              : selectedType.id === "early-bird"
+              ? "#f5576c"
+              : "#00f2fe"
+          );
+          ctx.fillStyle = gradient;
+          ctx.fillRect(0, 0, 400, 400);
+
+          // Add text
+          ctx.fillStyle = "#ffffff";
+          ctx.font = "bold 32px Inter";
+          ctx.textAlign = "center";
+          ctx.fillText(selectedType.name, 200, 200);
+        }
+      }
+
+      // Convert canvas to blob and then to File
+      await new Promise<void>((resolve) => {
+        canvas.toBlob((blob) => {
+          if (blob) {
+            imageFile = new File([blob], `${selectedTicketType}-ticket.png`, {
+              type: "image/png",
+            });
+          }
+          resolve();
+        });
+      });
+    }
+
+    if (!imageFile) {
+      toast.error("Không thể tạo ảnh vé");
       return;
     }
 
@@ -101,16 +265,17 @@ export function FestivalPage() {
         marketplaceAddress: festival.marketplace,
         tokenAddress: import.meta.env.VITE_FEST_TOKEN_ADDRESS,
         price: ticketData.price,
+        buyerAddress: address,
         ticketData: {
           name: ticketData.name,
           description: ticketData.description,
-          image: ticketData.image,
+          image: imageFile,
         },
       });
       console.log("Ticket purchased:", result);
       setShowBuyModal(false);
-      setTicketData({ name: "", description: "", price: "", image: null }); 
-      
+      setSelectedTicketType(null);
+      setTicketData({ name: "", description: "", price: "", image: null });
     } catch (error) {
       console.error("Error buying ticket:", error);
     }
@@ -410,9 +575,23 @@ export function FestivalPage() {
       {/* Buy Ticket Modal */}
       {showBuyModal && (
         <BuyTicketModal
-          onClose={() => setShowBuyModal(false)}
-          ticketData={ticketData}
-          onDataChange={setTicketData}
+          onClose={() => {
+            setShowBuyModal(false);
+            setSelectedTicketType(null);
+          }}
+          selectedType={selectedTicketType}
+          onSelectType={(typeId) => {
+            setSelectedTicketType(typeId);
+            const selected = TICKET_TYPES.find((t) => t.id === typeId);
+            if (selected) {
+              setTicketData({
+                name: selected.name,
+                description: selected.description,
+                price: selected.price,
+                image: null, // Will be generated automatically
+              });
+            }
+          }}
           onBuy={handleBuyPrimaryTicket}
           loading={buyTicketMutation.isPending}
         />
@@ -548,31 +727,19 @@ function TicketCard({ ticket, onBuy, loading }: TicketCardProps) {
 
 interface BuyTicketModalProps {
   onClose: () => void;
-  ticketData: {
-    name: string;
-    description: string;
-    price: string;
-    image: File | null;
-  };
-  onDataChange: (data: any) => void;
+  selectedType: string | null;
+  onSelectType: (typeId: string) => void;
   onBuy: () => void;
   loading: boolean;
 }
 
 function BuyTicketModal({
   onClose,
-  ticketData,
-  onDataChange,
+  selectedType,
+  onSelectType,
   onBuy,
   loading,
 }: BuyTicketModalProps) {
-  const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      onDataChange({ ...ticketData, image: file });
-    }
-  };
-
   return (
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal-content" onClick={(e) => e.stopPropagation()}>
@@ -585,9 +752,9 @@ function BuyTicketModal({
             }}
           >
             <div>
-              <h3 className="modal-title">Mua vé sơ cấp</h3>
+              <h3 className="modal-title">Chọn loại vé</h3>
               <p className="modal-description">
-                Điền thông tin vé của bạn để tiếp tục
+                Chọn một trong các loại vé có sẵn bên dưới
               </p>
             </div>
             <button
@@ -608,69 +775,158 @@ function BuyTicketModal({
         </div>
 
         <div className="modal-body">
-          <div className="input-group">
-            <label className="input-label input-label-required">Tên vé</label>
-            <input
-              type="text"
-              value={ticketData.name}
-              onChange={(e) =>
-                onDataChange({ ...ticketData, name: e.target.value })
-              }
-              className="input-field"
-              placeholder="VD: VIP Access, Standard..."
-            />
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(auto-fit, minmax(250px, 1fr))",
+              gap: "16px",
+              marginBottom: "24px",
+            }}
+          >
+            {TICKET_TYPES.map((ticketType) => (
+              <div
+                key={ticketType.id}
+                onClick={() => onSelectType(ticketType.id)}
+                style={{
+                  background:
+                    selectedType === ticketType.id
+                      ? ticketType.color
+                      : "#1a1a1a",
+                  border:
+                    selectedType === ticketType.id
+                      ? "2px solid #6366f1"
+                      : "2px solid #2a2a2a",
+                  borderRadius: "16px",
+                  padding: "20px",
+                  cursor: "pointer",
+                  transition: "all 0.3s ease",
+                  position: "relative",
+                  overflow: "hidden",
+                }}
+                onMouseEnter={(e) => {
+                  if (selectedType !== ticketType.id) {
+                    e.currentTarget.style.border = "2px solid #4a4a4a";
+                    e.currentTarget.style.transform = "translateY(-4px)";
+                  }
+                }}
+                onMouseLeave={(e) => {
+                  if (selectedType !== ticketType.id) {
+                    e.currentTarget.style.border = "2px solid #2a2a2a";
+                    e.currentTarget.style.transform = "translateY(0)";
+                  }
+                }}
+              >
+                {selectedType === ticketType.id && (
+                  <div
+                    style={{
+                      position: "absolute",
+                      top: "12px",
+                      right: "12px",
+                      width: "28px",
+                      height: "28px",
+                      borderRadius: "50%",
+                      background: "#ffffff",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      fontSize: "16px",
+                    }}
+                  >
+                    ✓
+                  </div>
+                )}
+
+                <div
+                  style={{
+                    fontSize: "48px",
+                    marginBottom: "12px",
+                    filter:
+                      selectedType === ticketType.id
+                        ? "drop-shadow(0 0 8px rgba(255,255,255,0.5))"
+                        : "none",
+                  }}
+                >
+                  {ticketType.icon}
+                </div>
+
+                <h4
+                  style={{
+                    fontSize: "20px",
+                    fontWeight: "700",
+                    marginBottom: "8px",
+                    color: "#ffffff",
+                  }}
+                >
+                  {ticketType.name}
+                </h4>
+
+                <p
+                  style={{
+                    fontSize: "14px",
+                    color:
+                      selectedType === ticketType.id ? "#ffffff" : "#b0b0b0",
+                    marginBottom: "12px",
+                    lineHeight: "1.5",
+                    minHeight: "60px",
+                  }}
+                >
+                  {ticketType.description}
+                </p>
+
+                <div
+                  style={{
+                    fontSize: "24px",
+                    fontWeight: "700",
+                    color: "#ffffff",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "8px",
+                  }}
+                >
+                  <span>{ticketType.price}</span>
+                  <span style={{ fontSize: "16px", opacity: 0.8 }}>FEST</span>
+                </div>
+              </div>
+            ))}
           </div>
 
-          <div className="input-group">
-            <label className="input-label input-label-required">Mô tả</label>
-            <textarea
-              value={ticketData.description}
-              onChange={(e) =>
-                onDataChange({ ...ticketData, description: e.target.value })
-              }
-              className="input-field"
-              placeholder="Mô tả về vé của bạn..."
-            />
-          </div>
-
-          <div className="input-group">
-            <label className="input-label input-label-required">
-              Giá (FEST)
-            </label>
-            <input
-              type="number"
-              value={ticketData.price}
-              onChange={(e) =>
-                onDataChange({ ...ticketData, price: e.target.value })
-              }
-              className="input-field"
-              placeholder="50"
-            />
-            <p className="input-helper">Nhập giá vé bằng token FEST</p>
-          </div>
-
-          <div className="input-group">
-            <label className="input-label input-label-required">
-              Hình ảnh vé
-            </label>
-            <input
-              type="file"
-              accept="image/*"
-              onChange={handleImageChange}
-              className="input-field"
-              style={{ padding: "8px 12px" }}
-            />
-            <p className="input-helper">
-              Chọn hình ảnh đại diện cho vé (JPG, PNG)
-            </p>
-          </div>
+          {selectedType && (
+            <div
+              style={{
+                background: "rgba(99, 102, 241, 0.1)",
+                border: "1px solid rgba(99, 102, 241, 0.3)",
+                borderRadius: "12px",
+                padding: "16px",
+                marginTop: "16px",
+              }}
+            >
+              <p style={{ color: "#e0e0e0", fontSize: "14px", margin: 0 }}>
+                ✨ Bạn đã chọn:{" "}
+                <strong style={{ color: "#ffffff" }}>
+                  {TICKET_TYPES.find((t) => t.id === selectedType)?.name}
+                </strong>{" "}
+                với giá{" "}
+                <strong style={{ color: "#ffffff" }}>
+                  {TICKET_TYPES.find((t) => t.id === selectedType)?.price} FEST
+                </strong>
+              </p>
+            </div>
+          )}
         </div>
 
         <div className="modal-footer">
           <button onClick={onClose} className="btn-outline">
             Hủy
           </button>
-          <button onClick={onBuy} disabled={loading} className="btn-primary">
+          <button
+            onClick={onBuy}
+            disabled={loading || !selectedType}
+            className="btn-primary"
+            style={{
+              opacity: !selectedType && !loading ? 0.5 : 1,
+              cursor: !selectedType && !loading ? "not-allowed" : "pointer",
+            }}
+          >
             {loading ? "Đang xử lý..." : "Mua vé"}
           </button>
         </div>

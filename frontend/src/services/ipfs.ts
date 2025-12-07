@@ -1,7 +1,11 @@
 import { NFTStorage, File } from 'nft.storage';
 import { TicketMetadata } from '@/types';
 
-const client = new NFTStorage({ token: import.meta.env.VITE_NFT_STORAGE_API_KEY });
+// Check if we have a valid API key, otherwise use mock mode
+const API_KEY = import.meta.env.VITE_NFT_STORAGE_API_KEY;
+const USE_MOCK = !API_KEY || API_KEY === 'your_nft_storage_api_key_here';
+
+const client = USE_MOCK ? null : new NFTStorage({ token: API_KEY });
 
 export interface UploadMetadataParams {
   name: string;
@@ -15,12 +19,31 @@ export interface UploadMetadataParams {
 
 /**
  * Upload ticket metadata and image to IPFS
+ * For local testing without NFT.Storage API key, generates mock IPFS URI
  * @param data Metadata and image to upload
  * @returns Promise<string> The IPFS URI for the metadata
  */
 export async function uploadMetadata(data: UploadMetadataParams): Promise<string> {
+  // Mock mode for local testing
+  if (USE_MOCK) {
+    console.log('🔧 Using MOCK IPFS (no API key configured)');
+    console.log('Metadata:', { name: data.name, description: data.description });
+    
+    // Generate a fake IPFS hash for testing
+    const mockHash = 'Qm' + Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
+    const mockUri = `ipfs://${mockHash}`;
+    
+    console.log('Mock IPFS URI:', mockUri);
+    
+    // Simulate network delay
+    await new Promise(resolve => setTimeout(resolve, 1000));
+    
+    return mockUri;
+  }
+
+  // Real NFT.Storage mode
   try {
-    const result = await client.store({
+    const result = await client!.store({
       name: data.name,
       description: data.description,
       image: data.image,
@@ -28,9 +51,9 @@ export async function uploadMetadata(data: UploadMetadataParams): Promise<string
     });
     return result.url;
   } catch (error: any) {
-    console.error("FULL IPFS ERROR:", error);
-    console.error("IPFS error message:", error.message);
-    throw new Error("Failed to upload metadata to IPFS");
+    console.error("IPFS ERROR:", error);
+    console.error("Error message:", error.message);
+    throw new Error("Failed to upload metadata to IPFS: " + error.message);
   }
 }
 
@@ -41,8 +64,17 @@ export async function uploadMetadata(data: UploadMetadataParams): Promise<string
  * @returns Promise<string> The IPFS URI for the image
  */
 export async function uploadImage(image: File): Promise<string> {
+  // Mock mode for local testing
+  if (USE_MOCK) {
+    console.log('🔧 Using MOCK IPFS for image upload');
+    const mockHash = 'Qm' + Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
+    await new Promise(resolve => setTimeout(resolve, 800));
+    return `ipfs://${mockHash}`;
+  }
+
+  // Real NFT.Storage mode
   try {
-    const result = await client.storeBlob(image);
+    const result = await client!.storeBlob(image);
     return `ipfs://${result}`;
   } catch (error) {
     console.error('Error uploading image to IPFS:', error);

@@ -28,19 +28,28 @@ async function main() {
 
   // 3. Create a sample festival for testing
   console.log("\n3. Creating sample festival...");
+
+  // Use specific address for organiser
+  const sampleOrganiser = "0x70997970C51812dc3A010C7d01b50e0d17dc79C8";
+  console.log("Creating festival for organiser:", sampleOrganiser);
+
   const createTx = await factory.createNewFest(
     "Summer Music Fest",
     "SMF",
-    deployer.address
+    sampleOrganiser
   );
   const receipt = await createTx.wait();
 
   // Get the created addresses from the event
+  let sampleNFT = "";
+  let sampleMarketplace = "";
   const event = receipt.logs.find(
     (log) => log.fragment && log.fragment.name === "FestivalCreated"
   );
   if (event) {
     const [organiser, nftContract, marketplace, name, symbol] = event.args;
+    sampleNFT = nftContract;
+    sampleMarketplace = marketplace;
     console.log("Sample Festival created:");
     console.log("  NFT Contract:", nftContract);
     console.log("  Marketplace:", marketplace);
@@ -51,16 +60,31 @@ async function main() {
   // 4. Mint some FEST tokens for testing
   console.log("\n4. Minting FEST tokens for testing...");
   const mintAmount = ethers.parseEther("10000"); // 10,000 FEST tokens
+
+  // Mint for deployer
   await festToken.mint(deployer.address, mintAmount);
   console.log(
     "Minted",
     ethers.formatEther(mintAmount),
-    "FEST tokens to deployer"
+    "FEST tokens to deployer:",
+    deployer.address
+  );
+
+  // Mint for sample organiser
+  await festToken.mint(sampleOrganiser, mintAmount);
+  console.log(
+    "Minted",
+    ethers.formatEther(mintAmount),
+    "FEST tokens to organiser:",
+    sampleOrganiser
   );
 
   console.log("\n=== Deployment Summary ===");
   console.log("FestToken:", festTokenAddress);
   console.log("FestiveTicketsFactory:", factoryAddress);
+  console.log("Sample NFT Contract:", sampleNFT);
+  console.log("Sample Marketplace:", sampleMarketplace);
+  console.log("Organiser:", sampleOrganiser);
   console.log("Network:", await ethers.provider.getNetwork());
 
   // Save addresses to a file for frontend
@@ -68,6 +92,9 @@ async function main() {
   const addresses = {
     FestToken: festTokenAddress,
     FestiveTicketsFactory: factoryAddress,
+    SampleNFT: sampleNFT,
+    SampleMarketplace: sampleMarketplace,
+    Organiser: sampleOrganiser,
     network: (await ethers.provider.getNetwork()).name,
   };
 
