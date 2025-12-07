@@ -7,6 +7,10 @@ import "@openzeppelin/contracts/utils/Pausable.sol";
 import "./FestivalNFT.sol";
 import "./FestivalMarketplace.sol";
 
+/**
+ * @title FestiveTicketsFactory
+ * @dev Factory contract for creating festival NFT and marketplace instances
+ */
 contract FestiveTicketsFactory is Ownable, ReentrancyGuard, Pausable {
     address public immutable festTokenAddress;
     
@@ -19,9 +23,9 @@ contract FestiveTicketsFactory is Ownable, ReentrancyGuard, Pausable {
     
     // Events
     event FestivalCreated(
-        address indexed organiser,
         address indexed nftContract,
         address indexed marketplace,
+        address indexed organiser,
         string name,
         string symbol
     );
@@ -39,90 +43,72 @@ contract FestiveTicketsFactory is Ownable, ReentrancyGuard, Pausable {
      * @return nftContract Address of the created NFT contract
      * @return marketplaceContract Address of the created marketplace contract
      */
-    function createNewFest(
+    function createFestival(
         string memory name, 
         string memory symbol,
         address organiser
-    ) external onlyOwner nonReentrant whenNotPaused returns (address nftContract, address marketplaceContract) {
+    ) external nonReentrant whenNotPaused returns (address nftContract, address marketplaceContract) {
         require(organiser != address(0), "Invalid organiser address");
         require(bytes(name).length > 0, "Name cannot be empty");
         require(bytes(symbol).length > 0, "Symbol cannot be empty");
         
-        // Deploy NFT contract
-        FestivalNFT nft = new FestivalNFT(name, symbol, organiser);
-        nftContract = address(nft);
+        // Create NFT contract
+        FestivalNFT newNFT = new FestivalNFT(name, symbol, organiser);
+        nftContract = address(newNFT);
         
-        // Deploy Marketplace contract
-        FestivalMarketplace marketplace = new FestivalMarketplace(organiser, festTokenAddress);
-        marketplaceContract = address(marketplace);
+        // Create Marketplace contract
+        FestivalMarketplace newMarketplace = new FestivalMarketplace(organiser, festTokenAddress);
+        marketplaceContract = address(newMarketplace);
         
-        // Grant MINTER_ROLE to marketplace so it can mint tickets
-        nft.grantRole(nft.MINTER_ROLE(), marketplaceContract);
+        // Grant MINTER_ROLE to marketplace
+        bytes32 MINTER_ROLE = keccak256("MINTER_ROLE");
+        newNFT.grantRole(MINTER_ROLE, marketplaceContract);
         
-        // Add to tracking
+        // Track the festival
         isValidFestival[nftContract] = true;
         allFestivals.push(nftContract);
         allMarketplaces.push(marketplaceContract);
         
-        emit FestivalCreated(organiser, nftContract, marketplaceContract, name, symbol);
+        emit FestivalCreated(nftContract, marketplaceContract, organiser, name, symbol);
         
         return (nftContract, marketplaceContract);
     }
 
     /**
-     * @dev Get the total number of festivals created
+     * @dev Get total number of festivals created
      */
-    function getTotalFestivals() external view returns (uint256) {
+    function getFestivalCount() external view returns (uint256) {
         return allFestivals.length;
     }
 
     /**
-     * @dev Get festival NFT contract address by index
+     * @dev Get festival and marketplace addresses by index
      */
-    function getFestivalByIndex(uint256 index) external view returns (address) {
+    function getFestivalByIndex(uint256 index) 
+        external 
+        view 
+        returns (address nftContract, address marketplace) 
+    {
         require(index < allFestivals.length, "Index out of bounds");
-        return allFestivals[index];
+        return (allFestivals[index], allMarketplaces[index]);
     }
 
     /**
-     * @dev Get marketplace contract address by index
-     */
-    function getMarketplaceByIndex(uint256 index) external view returns (address) {
-        require(index < allMarketplaces.length, "Index out of bounds");
-        return allMarketplaces[index];
-    }
-
-    /**
-     * @dev Get all festival contracts
+     * @dev Get all festival addresses
      */
     function getAllFestivals() external view returns (address[] memory) {
         return allFestivals;
     }
 
     /**
-     * @dev Get all marketplace contracts
+     * @dev Get all marketplace addresses
      */
     function getAllMarketplaces() external view returns (address[] memory) {
         return allMarketplaces;
     }
 
     /**
-     * @dev Check if a contract is a valid festival created by this factory
-     */
-    function checkValidFestival(address festivalAddress) external view returns (bool) {
-        return isValidFestival[festivalAddress];
-    }
-
-    /**
-     * @dev Get festival and marketplace pair by index
-     */
-    function getFestivalPair(uint256 index) external view returns (address festival, address marketplace) {
-        require(index < allFestivals.length, "Index out of bounds");
-        return (allFestivals[index], allMarketplaces[index]);
-    }
-
-    /**
-     * @dev Pause the factory (prevents new festival creation)
+     * @dev Pause the factory
      */
     function pause() external onlyOwner {
         _pause();
@@ -133,14 +119,5 @@ contract FestiveTicketsFactory is Ownable, ReentrancyGuard, Pausable {
      */
     function unpause() external onlyOwner {
         _unpause();
-    }
-
-    /**
-     * @dev Update FEST token address (emergency function)
-     */
-    function updateFestTokenAddress(address newTokenAddress) external onlyOwner {
-        require(newTokenAddress != address(0), "Invalid token address");
-        // Note: This doesn't change existing marketplaces, only affects new ones
-        // Consider if this function is needed or should be removed for immutability
     }
 }

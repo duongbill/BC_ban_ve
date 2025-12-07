@@ -1,7 +1,7 @@
 const { expect } = require("chai");
 const { ethers } = require("hardhat");
 
-describe("Festival Marketplace 2.0", function () {
+describe("Festival Marketplace", function () {
   let festToken, factory, nftContract, marketplace;
   let owner, organiser, buyer, seller;
   let nftAddress, marketplaceAddress;
@@ -20,7 +20,7 @@ describe("Festival Marketplace 2.0", function () {
     await factory.waitForDeployment();
 
     // Create a festival
-    const tx = await factory.createNewFest(
+    const tx = await factory.createFestival(
       "Test Festival",
       "TF",
       organiser.address
@@ -60,18 +60,19 @@ describe("Festival Marketplace 2.0", function () {
 
   describe("FestiveTicketsFactory", function () {
     it("Should create festival with correct parameters", async function () {
-      expect(await factory.getTotalFestivals()).to.equal(1);
-      expect(await factory.getFestivalByIndex(0)).to.equal(nftAddress);
-      expect(await factory.getMarketplaceByIndex(0)).to.equal(
-        marketplaceAddress
+      expect(await factory.getFestivalCount()).to.equal(1);
+      const [festivalAddress, marketAddress] = await factory.getFestivalByIndex(
+        0
       );
+      expect(festivalAddress).to.equal(nftAddress);
+      expect(marketAddress).to.equal(marketplaceAddress);
     });
 
     it("Should only allow owner to create festivals", async function () {
       await expect(
         factory
           .connect(buyer)
-          .createNewFest("Unauthorized Festival", "UF", buyer.address)
+          .createFestival("Unauthorized Festival", "UF", buyer.address)
       ).to.be.revertedWithCustomError(factory, "OwnableUnauthorizedAccount");
     });
   });

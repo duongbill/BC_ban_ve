@@ -1,53 +1,115 @@
-# Festival Marketplace 2.0
+# 🎫 Festival Ticket Marketplace
 
-Ứng dụng phi tập trung (dApp) cho sàn giao dịch vé sự kiện âm nhạc, được xây dựng bằng Solidity smart contracts, React, TypeScript và các công nghệ Web3 tiên tiến.
+> **Hệ thống quản lý và mua bán vé sự kiện trên blockchain**  
+> Ứng dụng Web3 với smart contracts Solidity, React TypeScript, và UI hiện đại
 
-## 🏗️ Kiến trúc
+---
+
+## 📖 Giới Thiệu
+
+**Festival Ticket Marketplace** là nền tảng mua bán vé sự kiện phi tập trung, sử dụng công nghệ blockchain để đảm bảo:
+
+- ✅ **Chống giả mạo vé** - Mỗi vé là NFT duy nhất trên blockchain
+- ✅ **Minh bạch giao dịch** - Lịch sử mua bán được ghi nhận công khai
+- ✅ **Giới hạn chênh lệch giá** - Tối đa 110% giá gốc khi bán lại
+- ✅ **Xác thực QR code** - Quét mã QR tại cổng vào sự kiện
+- ✅ **Tặng vé miễn phí** - Chuyển vé cho bạn bè không qua sàn
+- ✅ **Hoa hồng công bằng** - 5% cho ban tổ chức, 10% cho sàn
+
+---
+
+## 🎯 Tính Năng Chính
+
+### 🎪 Cho Người Tổ Chức Sự Kiện
+
+- Tạo sự kiện và phát hành vé NFT
+- Quản lý trạng thái sự kiện (Active/Paused/Cancelled/Completed)
+- Nhận hoa hồng 5% từ giao dịch thứ cấp
+- Xác thực vé tại cổng vào (VERIFIER_ROLE)
+- Theo dõi số lượng vé đã bán
+
+### 🎟️ Cho Người Mua Vé
+
+- Mua vé trực tiếp từ ban tổ chức
+- Xem tất cả vé đã mua với QR code
+- Bán lại vé (tối đa 110% giá gốc)
+- Tặng vé miễn phí cho bạn bè
+- Xem lịch sử giá và giao dịch
+- Tải xuống QR code để vào cổng
+
+### 🛒 Chợ Thứ Cấp
+
+- Mua vé từ người dùng khác
+- Filter: Upcoming / Past / All events
+- So sánh giá với giá gốc
+- Hệ thống phí minh bạch (15% total)
+
+---
+
+## 🏗️ Kiến Trúc Hệ Thống
 
 ### Smart Contracts
 
-- **FestToken (ERC20)**: Token gốc cho sàn giao dịch
-- **FestivalNFT (ERC721)**: NFT vé sự kiện với giới hạn bán lại
-- **FestivalMarketplace**: Giao dịch vé sơ cấp và thứ cấp
-- **FestiveTicketsFactory**: Tạo các instance sự kiện
+```
+┌─────────────────────────────────────────────────┐
+│           FestToken (ERC20)                     │
+│  Token thanh toán (FEST) - 18 decimals         │
+└─────────────────────────────────────────────────┘
+                      │
+                      ▼
+┌─────────────────────────────────────────────────┐
+│     FestiveTicketsFactory                       │
+│  Factory tạo NFT + Marketplace cho mỗi event    │
+└─────────────────────────────────────────────────┘
+           │                        │
+           ▼                        ▼
+┌────────────────────┐   ┌────────────────────────┐
+│  FestivalNFT       │   │ FestivalMarketplace    │
+│  (ERC721)          │◄─►│  Primary + Secondary   │
+│                    │   │  Sales Marketplace     │
+│  • Event Status    │   │                        │
+│  • QR Verify       │   │  • Batch Purchase      │
+│  • Gift Transfer   │   │  • Royalty System      │
+│  • Batch Minting   │   │  • Fee Calculation     │
+└────────────────────┘   └────────────────────────┘
+```
 
 ### Frontend Stack
 
-- **React 18** with TypeScript
-- **Vite** cho phát triển nhanh
-- **Tailwind CSS** cho styling
-- **Wagmi + RainbowKit** cho tích hợp Web3
-- **Biconomy SDK** cho giao dịch không phí gas
-- **TanStack Query** cho quản lý state
-- **IPFS** cho lưu trữ metadata
-
-## 🚀 Getting Started
-
-### Prerequisites
-
-- Node.js 18+
-- npm or yarn
-- Hardhat
-- MetaMask hoặc ví tương thích
-
-### 1. Cài đặt Dependencies
-
-```bash
-# Cài đặt smart contract dependencies (ở thư mục gốc)
-npm install
-
-# Cài đặt frontend dependencies
-cd frontend
-npm install
+```
+React 18 + TypeScript + Vite
+├── Wagmi v2 - Web3 wallet integration
+├── RainbowKit - Beautiful wallet UI
+├── TanStack Query - Data fetching & caching
+├── Tailwind CSS - Utility-first styling
+├── QRCode - Generate ticket QR codes
+└── React Hot Toast - Notifications
 ```
 
-### 2. Test Smart Contracts
+---
+
+## 🚀 Quick Start
+
+### Yêu Cầu Hệ Thống
+
+- **Node.js** 18+
+- **npm** or **yarn**
+- **MetaMask** browser extension
+- **Git**
+
+### Bước 1: Clone & Install
 
 ```bash
-# Chạy test suite (từ thư mục gốc)
-npx hardhat test
+# Clone repository
+git clone https://github.com/duongbill/BC_ban_ve.git
+cd BC_ban_ve
 
-# Xem chi tiết gas usage
+# Install root dependencies
+npm install
+
+# Install frontend dependencies
+cd frontend
+npm install
 REPORT_GAS=true npx hardhat test
 
 # Test một file cụ thể
@@ -142,7 +204,11 @@ Truy cập: `http://localhost:5173`
 
 5. **Kiểm tra vé đã mua**:
    - Vào trang "Vé của tôi"
-   - Xem NFT ticket vừa mua
+   - Xem NFT ticket vừa mua (fetch trực tiếp từ blockchain)
+   - Tạo QR code cho vé
+   - Có thể resell hoặc gift vé
+
+> **Lưu ý**: Danh sách festivals trên HomePage hiện dùng mock data. Vé đã mua trên MyTicketsPage được fetch từ blockchain thực tế thông qua hook `useMyTickets()`.
 
 ### 8. Debug & Troubleshooting
 
@@ -206,6 +272,8 @@ node scripts/update-env.js
 - **Tích hợp Web3**: Kết nối với MetaMask qua RainbowKit
 - **Wagmi v2**: React hooks cho blockchain interactions
 - **Mock IPFS**: Local testing không cần API key
+- **Mock Data**: Dữ liệu demo cho festivals và tickets (có thể thay bằng API thật)
+- **Blockchain Query**: Vé đã mua được fetch trực tiếp từ smart contract
 - **Thiết kế responsive**: Giao diện mobile-first với Tailwind CSS
 - **Cập nhật realtime**: Tích hợp TanStack React Query
 - **Ticket Selection UI**: Chọn loại vé từ 4 options có sẵn (VIP, Standard, Early Bird, Student)
@@ -289,6 +357,22 @@ contracts/
 ├── FestivalNFT.sol        # ERC721 vé sự kiện
 ├── FestivalMarketplace.sol # Logic giao dịch
 └── FestiveTicketsFactory.sol # Deploy sự kiện
+```
+
+### Cấu trúc Backend (Tùy chọn)
+
+```
+backend/
+├── src/
+│   ├── controllers/      # API controllers
+│   ├── services/         # Business logic
+│   ├── routes/          # API routes
+│   ├── models/          # Database models
+│   ├── middleware/      # Express middleware
+│   └── utils/           # Helper functions
+├── config/              # Configuration files
+├── tests/               # API tests
+└── package.json
 ```
 
 ### Cấu trúc Frontend
@@ -465,6 +549,226 @@ MIT License - see LICENSE file
 - [RainbowKit](https://www.rainbowkit.com/)
 - [Biconomy](https://biconomy.io/)
 - [Tailwind CSS](https://tailwindcss.com/)
+
+---
+
+## 🔌 Backend APIs (Tùy chọn)
+
+> **Lưu ý**: Hiện tại project sử dụng **mock data + blockchain queries** để hoạt động độc lập. Backend APIs dưới đây là thiết kế cho tương lai nếu muốn mở rộng với database và indexer service.
+
+### 🎯 Tổng quan Backend
+
+Backend service giúp:
+
+- **Index blockchain events** → Lưu vào database để query nhanh
+- **Cache dữ liệu** → Giảm RPC calls đến blockchain
+- **Quản lý metadata** → Upload/serve IPFS content
+- **Analytics** → Thống kê giao dịch, doanh thu
+- **Search & Filter** → Tìm kiếm sự kiện, vé
+
+### 📡 API Categories
+
+#### 1. Festival APIs
+
+```
+GET    /api/festivals
+GET    /api/festivals/:nftContract
+GET    /api/festivals/:nftContract/tickets
+POST   /api/festivals (Admin only)
+```
+
+**Response Example:**
+
+```json
+{
+  "nftContract": "0x1234...",
+  "name": "Summer Music Fest",
+  "organizer": "0xabcd...",
+  "eventDate": 1735689600000,
+  "location": "Hanoi",
+  "status": "Active",
+  "totalTickets": 1000,
+  "soldTickets": 450,
+  "imageUrl": "ipfs://Qm..."
+}
+```
+
+#### 2. Ticket APIs
+
+```
+GET    /api/tickets/:nftContract/:tokenId
+GET    /api/users/:address/tickets
+GET    /api/tickets/:nftContract/:tokenId/history
+```
+
+**Response Example:**
+
+```json
+{
+  "tokenId": 42,
+  "nftContract": "0x1234...",
+  "owner": "0xabcd...",
+  "ticketType": "VIP",
+  "price": "100000000000000000000",
+  "isUsed": false,
+  "purchasedAt": 1735000000000,
+  "qrCode": "data:image/png;base64,..."
+}
+```
+
+#### 3. Transaction APIs
+
+```
+GET    /api/transactions/:nftContract
+GET    /api/transactions/user/:address
+GET    /api/transactions/:txHash
+```
+
+**Response Example:**
+
+```json
+{
+  "txHash": "0xabcd...",
+  "type": "PrimaryPurchase",
+  "buyer": "0x1234...",
+  "seller": "0x5678...",
+  "tokenId": 42,
+  "price": "100000000000000000000",
+  "timestamp": 1735000000000
+}
+```
+
+#### 4. Analytics APIs
+
+```
+GET    /api/analytics/marketplace
+GET    /api/analytics/festival/:nftContract
+GET    /api/analytics/user/:address
+```
+
+**Response Example:**
+
+```json
+{
+  "totalRevenue": "50000000000000000000000",
+  "totalTransactions": 1250,
+  "averageTicketPrice": "40000000000000000000",
+  "topFestivals": [...],
+  "revenueByDay": [...]
+}
+```
+
+#### 5. Search APIs
+
+```
+GET    /api/search/festivals?q=music&status=Active
+GET    /api/search/tickets?minPrice=50&maxPrice=100
+```
+
+#### 6. IPFS APIs
+
+```
+POST   /api/ipfs/upload
+GET    /api/metadata/:ipfsHash
+```
+
+#### 7. User Profile APIs
+
+```
+GET    /api/users/:address/profile
+GET    /api/users/:address/stats
+```
+
+#### 8. Webhook & Notifications
+
+```
+POST   /api/webhooks/blockchain (Internal)
+GET    /api/notifications/:address
+```
+
+### 🛠️ Tech Stack đề xuất
+
+**Backend Framework:**
+
+- Node.js + Express.js
+- TypeScript
+- PostgreSQL / MongoDB
+- Redis (caching)
+
+**Blockchain Indexer:**
+
+- Ethers.js / Viem
+- Event listeners cho contracts
+- Queue system (Bull/Redis)
+
+**Infrastructure:**
+
+- Docker + Docker Compose
+- Nginx reverse proxy
+- PM2 process manager
+
+### 📊 Database Schema (PostgreSQL)
+
+```sql
+-- Festivals table
+CREATE TABLE festivals (
+  id SERIAL PRIMARY KEY,
+  nft_contract VARCHAR(42) UNIQUE NOT NULL,
+  marketplace_contract VARCHAR(42),
+  name VARCHAR(255),
+  organizer VARCHAR(42),
+  event_date TIMESTAMP,
+  status VARCHAR(20),
+  created_at TIMESTAMP DEFAULT NOW()
+);
+
+-- Tickets table
+CREATE TABLE tickets (
+  id SERIAL PRIMARY KEY,
+  nft_contract VARCHAR(42),
+  token_id INTEGER,
+  owner VARCHAR(42),
+  ticket_type VARCHAR(50),
+  price NUMERIC(78, 0),
+  is_used BOOLEAN DEFAULT false,
+  purchased_at TIMESTAMP,
+  UNIQUE(nft_contract, token_id)
+);
+
+-- Transactions table
+CREATE TABLE transactions (
+  id SERIAL PRIMARY KEY,
+  tx_hash VARCHAR(66) UNIQUE,
+  nft_contract VARCHAR(42),
+  token_id INTEGER,
+  type VARCHAR(30),
+  buyer VARCHAR(42),
+  seller VARCHAR(42),
+  price NUMERIC(78, 0),
+  timestamp TIMESTAMP
+);
+```
+
+### 🚀 Quick Start Backend (Nếu cần)
+
+```bash
+# Tạo backend directory
+mkdir backend
+cd backend
+
+# Initialize Node.js project
+npm init -y
+
+# Install dependencies
+npm install express cors dotenv ethers pg redis
+npm install -D typescript @types/node @types/express ts-node nodemon
+
+# Xem file backend/README.md để biết thêm chi tiết
+```
+
+> **Khuyến nghị**: Bắt đầu với mock data và blockchain queries như hiện tại. Chỉ implement backend khi cần scale hoặc cần tính năng analytics phức tạp.
+
+---
 
 ## 🆘 Hỗ trợ
 

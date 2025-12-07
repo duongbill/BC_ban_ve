@@ -1,7 +1,7 @@
 const { expect } = require("chai");
 const { ethers } = require("hardhat");
 
-describe("FestivalNFTv2", function () {
+describe("FestivalNFT", function () {
   let festivalNFT;
   let owner, admin, minter, verifier, buyer, recipient;
   const MINTER_ROLE = ethers.keccak256(ethers.toUtf8Bytes("MINTER_ROLE"));
@@ -11,8 +11,8 @@ describe("FestivalNFTv2", function () {
     [owner, admin, minter, verifier, buyer, recipient] =
       await ethers.getSigners();
 
-    const FestivalNFTv2 = await ethers.getContractFactory("FestivalNFTv2");
-    festivalNFT = await FestivalNFTv2.deploy(
+    const FestivalNFT = await ethers.getContractFactory("FestivalNFT");
+    festivalNFT = await FestivalNFT.deploy(
       "Festival Tickets",
       "FEST",
       admin.address

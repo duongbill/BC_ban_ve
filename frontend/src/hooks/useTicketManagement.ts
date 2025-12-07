@@ -3,8 +3,8 @@ import { useWriteContract, usePublicClient, useAccount } from 'wagmi';
 import { parseEther } from 'viem';
 import toast from 'react-hot-toast';
 
-// NFTv2 ABI for new functions
-const NFT_V2_ABI = [
+// NFT ABI for ticket management functions
+const NFT_ABI = [
   {
     name: 'setTicketForSale',
     type: 'function',
@@ -142,7 +142,7 @@ export function useListTicketForSale() {
 
       const hash = await writeContractAsync({
         address: nftAddress as `0x${string}`,
-        abi: NFT_V2_ABI,
+        abi: NFT_ABI,
         functionName: 'setTicketForSale',
         args: [BigInt(tokenId), priceInWei],
       });
@@ -189,7 +189,7 @@ export function useUnlistTicket() {
     }) => {
       const hash = await writeContractAsync({
         address: nftAddress as `0x${string}`,
-        abi: NFT_V2_ABI,
+        abi: NFT_ABI,
         functionName: 'removeTicketFromSale',
         args: [BigInt(tokenId)],
       });
@@ -236,7 +236,7 @@ export function useGiftTicket() {
     }) => {
       const hash = await writeContractAsync({
         address: nftAddress as `0x${string}`,
-        abi: NFT_V2_ABI,
+        abi: NFT_ABI,
         functionName: 'giftTicket',
         args: [toAddress as `0x${string}`, BigInt(tokenId)],
       });
@@ -285,7 +285,7 @@ export function useVerifyTicket() {
     }) => {
       const hash = await writeContractAsync({
         address: nftAddress as `0x${string}`,
-        abi: NFT_V2_ABI,
+        abi: NFT_ABI,
         functionName: 'verifyTicket',
         args: [BigInt(tokenId)],
       });
@@ -332,7 +332,7 @@ export function useMyTickets(nftAddress: string, userAddress: string | undefined
       // Get token IDs owned by user
       const tokenIds = await publicClient.readContract({
         address: nftAddress as `0x${string}`,
-        abi: NFT_V2_ABI,
+        abi: NFT_ABI,
         functionName: 'getTicketsOwnedBy',
         args: [userAddress as `0x${string}`],
       }) as bigint[];
@@ -343,37 +343,37 @@ export function useMyTickets(nftAddress: string, userAddress: string | undefined
           const [tokenURI, purchasePrice, isForSale, sellingPrice, isGifted, isVerified] = await Promise.all([
             publicClient.readContract({
               address: nftAddress as `0x${string}`,
-              abi: NFT_V2_ABI,
+              abi: NFT_ABI,
               functionName: 'tokenURI',
               args: [tokenId],
             }) as Promise<string>,
             publicClient.readContract({
               address: nftAddress as `0x${string}`,
-              abi: NFT_V2_ABI,
+              abi: NFT_ABI,
               functionName: 'getTicketPurchasePrice',
               args: [tokenId],
             }) as Promise<bigint>,
             publicClient.readContract({
               address: nftAddress as `0x${string}`,
-              abi: NFT_V2_ABI,
+              abi: NFT_ABI,
               functionName: 'isTicketForSale',
               args: [tokenId],
             }) as Promise<boolean>,
             publicClient.readContract({
               address: nftAddress as `0x${string}`,
-              abi: NFT_V2_ABI,
+              abi: NFT_ABI,
               functionName: 'getTicketSellingPrice',
               args: [tokenId],
             }) as Promise<bigint>,
             publicClient.readContract({
               address: nftAddress as `0x${string}`,
-              abi: NFT_V2_ABI,
+              abi: NFT_ABI,
               functionName: 'isTicketGifted',
               args: [tokenId],
             }) as Promise<boolean>,
             publicClient.readContract({
               address: nftAddress as `0x${string}`,
-              abi: NFT_V2_ABI,
+              abi: NFT_ABI,
               functionName: 'isTicketVerified',
               args: [tokenId],
             }) as Promise<boolean>,
@@ -397,4 +397,4 @@ export function useMyTickets(nftAddress: string, userAddress: string | undefined
   });
 }
 
-export { NFT_V2_ABI };
+export { NFT_ABI };

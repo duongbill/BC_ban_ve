@@ -1,12 +1,16 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useAccount } from "wagmi";
 import { useBiconomyAccount } from "@/hooks/useBiconomyAccount";
 import { useListTicketForSale } from "@/hooks/useFestivalMutations";
+import { useMyTickets } from "@/hooks/useTicketManagement";
 import { Ticket } from "@/types";
 import { ipfsToHttp } from "@/services/ipfs";
 import toast from "react-hot-toast";
 import "../styles/my-tickets-page.css";
+
+// Import deployed addresses
+import deployedAddresses from "../../../deployedAddresses.json";
 
 // Mock tickets - in real app this would fetch from blockchain
 const mockTickets: Ticket[] = [
@@ -57,22 +61,67 @@ export function MyTicketsPage() {
     price: "",
   });
   const [activeFilter, setActiveFilter] = useState<string>("all");
+  const [realTickets, setRealTickets] = useState<any[]>([]);
 
   const listTicketMutation = useListTicketForSale();
+
+  // Fetch real tickets from blockchain
+  const myTicketsMutation = useMyTickets(
+    deployedAddresses.sampleNFT,
+    smartAccountAddress || address
+  );
+
+  useEffect(() => {
+    if (smartAccountAddress || address) {
+      myTicketsMutation.mutate(undefined, {
+        onSuccess: (data) => {
+          setRealTickets(data);
+        },
+        onError: (error) => {
+          console.error("Error fetching tickets:", error);
+          toast.error("Không thể tải danh sách vé");
+        },
+      });
+    }
+  }, [smartAccountAddress, address]);
 
   const {
     data: tickets,
     isLoading,
     error,
   } = useQuery({
-    queryKey: ["myTickets", smartAccountAddress || address],
+    queryKey: ["myTickets", smartAccountAddress || address, realTickets],
     queryFn: async () => {
       if (!smartAccountAddress && !address) return [];
 
-      // Simulate API call to fetch user's tickets
-      await new Promise((resolve) => setTimeout(resolve, 800));
+      // If we have real tickets from blockchain, use them
+      if (realTickets.length > 0) {
+        return realTickets.map((ticket) => ({
+          id: ticket.tokenId.toString(),
+          tokenId: ticket.tokenId,
+          tokenURI: ticket.tokenURI,
+          purchasePrice: (
+            BigInt(ticket.purchasePrice) / BigInt(10 ** 18)
+          ).toString(),
+          sellingPrice: ticket.isForSale
+            ? (BigInt(ticket.sellingPrice) / BigInt(10 ** 18)).toString()
+            : undefined,
+          isForSale: ticket.isForSale,
+          owner: ticket.owner,
+          isGifted: ticket.isGifted,
+          isVerified: ticket.isVerified,
+          festival: {
+            id: "1",
+            name: "Summer Music Festival",
+            symbol: "SUMMER",
+            nftContract: deployedAddresses.sampleNFT,
+            marketplace: deployedAddresses.sampleMarketplace,
+            organiser: deployedAddresses.organiser,
+          },
+        }));
+      }
 
-      // Filter tickets owned by the user
+      // Fallback to mock data if no real tickets
       return mockTickets.filter(
         (ticket) =>
           ticket.owner.toLowerCase() ===

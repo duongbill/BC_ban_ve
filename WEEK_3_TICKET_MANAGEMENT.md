@@ -11,9 +11,11 @@
 ## 📦 New Components Created
 
 ### 1. TicketDetailsModal.tsx
+
 **Location:** `frontend/src/components/TicketDetailsModal.tsx`
 
 **Features:**
+
 - ✅ Beautiful gradient header with event info
 - ✅ QR Code generation (200x200px canvas)
 - ✅ Token ID and purchase price display
@@ -25,6 +27,7 @@
 - ✅ Responsive modal design
 
 **QR Code Data Format:**
+
 ```json
 {
   "tokenId": 1,
@@ -35,6 +38,7 @@
 ```
 
 **Key Functions:**
+
 - `copyQRData()` - Copy ticket info to clipboard
 - `downloadQR()` - Download QR as image
 - `onResell()` - Open resell modal
@@ -43,9 +47,11 @@
 ---
 
 ### 2. ResellTicketModal.tsx
+
 **Location:** `frontend/src/components/ResellTicketModal.tsx`
 
 **Features:**
+
 - ✅ Price input with validation
 - ✅ **110% limit warning** (red alert)
 - ✅ Profit/Loss calculator
@@ -57,12 +63,14 @@
 - ✅ Responsive 2-step flow
 
 **Validation Rules:**
+
 - ✅ Price must be > 0
 - ✅ Price ≤ 110% of purchase price
 - ✅ Visual feedback (green/red borders)
 - ✅ Profit calculation in real-time
 
 **Fee Structure Display:**
+
 ```
 Sale Price:      100 FEST
 Marketplace:     -10 FEST (10%)
@@ -74,9 +82,11 @@ You Receive:     85 FEST
 ---
 
 ### 3. TransferTicketModal.tsx
+
 **Location:** `frontend/src/components/TransferTicketModal.tsx`
 
 **Features:**
+
 - ✅ **2-step confirmation flow**
 - ✅ Address input with validation (`isAddress()`)
 - ✅ Real-time address validation (green/red)
@@ -87,12 +97,14 @@ You Receive:     85 FEST
 - ✅ Transaction status tracking
 
 **Step 1: Enter Address**
+
 - Address input (0x...)
 - Validation: ✅ Valid / ❌ Invalid / ❌ Same as owner
 - Gas estimate
 - Warning box (yellow)
 
 **Step 2: Confirmation**
+
 - Visual ticket icon (animated pulse)
 - From/To addresses
 - Gas fee
@@ -104,27 +116,33 @@ You Receive:     85 FEST
 ## 🔧 New Hooks Created
 
 ### useTicketManagement.ts
+
 **Location:** `frontend/src/hooks/useTicketManagement.ts`
 
 **Exports:**
+
 1. **useListTicketForSale()**
+
    - List ticket on marketplace
    - Validates 110% limit
    - Returns transaction hash
    - Toast notifications
 
 2. **useUnlistTicket()**
+
    - Remove ticket from sale
    - Simple transaction
    - Success toast
 
 3. **useGiftTicket()**
+
    - Free transfer (no fees)
    - Validates recipient address
    - Prevents gift to self
    - Prevents gift of used tickets
 
 4. **useVerifyTicket()**
+
    - For organisers/staff only
    - Marks ticket as used
    - Prevents double-entry
@@ -135,6 +153,7 @@ You Receive:     85 FEST
    - Includes: tokenId, tokenURI, prices, status, isGifted, isVerified
 
 **NFT_V2_ABI includes:**
+
 - setTicketForSale
 - removeTicketFromSale
 - giftTicket
@@ -152,6 +171,7 @@ You Receive:     85 FEST
 ## 🎨 UI/UX Features
 
 ### Visual Design:
+
 - ✅ Gradient headers (blue-purple, green-emerald)
 - ✅ Glass-morphism effects
 - ✅ Smooth transitions & animations
@@ -164,6 +184,7 @@ You Receive:     85 FEST
   - 🟡 Yellow = Caution
 
 ### Animations:
+
 - ✅ Loading spinners
 - ✅ Pulse effects
 - ✅ Hover transitions
@@ -171,6 +192,7 @@ You Receive:     85 FEST
 - ✅ Progress bar animations
 
 ### Accessibility:
+
 - ✅ Keyboard navigation
 - ✅ Clear button states
 - ✅ Disabled state handling
@@ -182,6 +204,7 @@ You Receive:     85 FEST
 ## 📊 State Management
 
 ### Modal States:
+
 ```typescript
 const [detailsModal, setDetailsModal] = useState<{
   ticket: Ticket | null;
@@ -200,6 +223,7 @@ const [transferModal, setTransferModal] = useState<{
 ```
 
 ### Transaction States:
+
 - `isLoading` - During blockchain transaction
 - `isSuccess` - After successful transaction
 - `isError` - On transaction failure
@@ -209,20 +233,21 @@ const [transferModal, setTransferModal] = useState<{
 ## 🔗 Integration Points
 
 ### MyTicketsPage Integration:
+
 ```typescript
 // In MyTicketsPage.tsx, add:
-import { TicketDetailsModal } from '@/components/TicketDetailsModal';
-import { ResellTicketModal } from '@/components/ResellTicketModal';
-import { TransferTicketModal } from '@/components/TransferTicketModal';
-import { 
-  useListTicketForSale, 
-  useUnlistTicket, 
-  useGiftTicket 
-} from '@/hooks/useTicketManagement';
+import { TicketDetailsModal } from "@/components/TicketDetailsModal";
+import { ResellTicketModal } from "@/components/ResellTicketModal";
+import { TransferTicketModal } from "@/components/TransferTicketModal";
+import {
+  useListTicketForSale,
+  useUnlistTicket,
+  useGiftTicket,
+} from "@/hooks/useTicketManagement";
 
 // State
 const [activeModal, setActiveModal] = useState<{
-  type: 'details' | 'resell' | 'transfer' | null;
+  type: "details" | "resell" | "transfer" | null;
   ticket: Ticket | null;
 }>({ type: null, ticket: null });
 
@@ -233,7 +258,7 @@ const giftMutation = useGiftTicket();
 
 // Handlers
 const handleTicketClick = (ticket: Ticket) => {
-  setActiveModal({ type: 'details', ticket });
+  setActiveModal({ type: "details", ticket });
 };
 
 const handleResell = async (tokenId: number, price: string) => {
@@ -258,6 +283,7 @@ const handleTransfer = async (tokenId: number, toAddress: string) => {
 ## 🎯 User Flows
 
 ### 1. View Ticket Details Flow
+
 ```
 User clicks ticket card
   → TicketDetailsModal opens
@@ -267,6 +293,7 @@ User clicks ticket card
 ```
 
 ### 2. Resell Ticket Flow
+
 ```
 Click "Bán Lại Vé"
   → ResellTicketModal opens
@@ -281,6 +308,7 @@ Click "Bán Lại Vé"
 ```
 
 ### 3. Gift Transfer Flow
+
 ```
 Click "Tặng Vé"
   → TransferTicketModal opens (Step 1)
@@ -298,6 +326,7 @@ Click "Tặng Vé"
 ```
 
 ### 4. Unlist Ticket Flow
+
 ```
 Ticket is listed for sale
   → Click "Gỡ Khỏi Chợ" button
@@ -312,6 +341,7 @@ Ticket is listed for sale
 ## 🛡️ Error Handling
 
 ### Validation Errors:
+
 - ❌ Invalid price (< 0 or > 110%)
 - ❌ Invalid address format
 - ❌ Transfer to self
@@ -319,12 +349,14 @@ Ticket is listed for sale
 - ❌ Insufficient balance
 
 ### Transaction Errors:
+
 - ❌ User rejected transaction
 - ❌ Insufficient gas
 - ❌ Contract revert
 - ❌ Network error
 
 ### Error Messages (Vietnamese):
+
 ```
 - "Giá vượt quá 110% giá gốc"
 - "Địa chỉ ví không hợp lệ"
@@ -345,6 +377,7 @@ Ticket is listed for sale
 ```
 
 **Installed via:**
+
 ```bash
 cd frontend
 npm install qrcode @types/qrcode
@@ -355,21 +388,25 @@ npm install qrcode @types/qrcode
 ## 🎨 CSS Classes Used
 
 ### Gradients:
+
 - `bg-gradient-to-r from-blue-600 to-purple-600`
 - `bg-gradient-to-r from-green-500 to-emerald-600`
 - `bg-gradient-to-br from-blue-50 to-purple-50`
 
 ### Borders:
+
 - `border-2 border-blue-200`
 - `border-2 border-green-300`
 - `border-2 border-red-300`
 
 ### Text:
+
 - `text-slate-800` (dark)
 - `text-slate-600` (medium)
 - `text-slate-400` (light)
 
 ### States:
+
 - `hover:bg-slate-50`
 - `disabled:opacity-50`
 - `focus:ring-2 focus:ring-blue-200`
@@ -379,6 +416,7 @@ npm install qrcode @types/qrcode
 ## 🔮 Future Enhancements (Phase 2)
 
 ### Nice to Have:
+
 - [ ] Ticket activity history (all transfers)
 - [ ] Price chart for secondary market
 - [ ] Batch operations (select multiple tickets)
@@ -391,6 +429,7 @@ npm install qrcode @types/qrcode
 - [ ] Rating system for sellers
 
 ### Advanced Features:
+
 - [ ] WebSocket for real-time updates
 - [ ] Push notifications for ticket events
 - [ ] Analytics dashboard
@@ -403,6 +442,7 @@ npm install qrcode @types/qrcode
 ## 📱 Mobile Responsiveness
 
 All modals are mobile-friendly:
+
 - ✅ Touch-friendly buttons (min 44px)
 - ✅ Scrollable content (max-h-[90vh])
 - ✅ Responsive grid layouts
@@ -414,6 +454,7 @@ All modals are mobile-friendly:
 ## 🧪 Testing Checklist
 
 ### Manual Testing:
+
 - [ ] Open ticket details modal
 - [ ] Generate and view QR code
 - [ ] Copy QR data to clipboard
@@ -436,6 +477,7 @@ All modals are mobile-friendly:
 ## 🚀 Deployment Notes
 
 ### Before Deploying:
+
 1. ✅ QRCode library installed
 2. ✅ All components exported properly
 3. ✅ ABIs match deployed contracts
@@ -444,6 +486,7 @@ All modals are mobile-friendly:
 6. ✅ Check mobile responsiveness
 
 ### After Deploying:
+
 1. Test on testnet first
 2. Monitor gas costs
 3. Check transaction confirmations
@@ -455,12 +498,14 @@ All modals are mobile-friendly:
 ## 📖 Documentation
 
 ### For Users:
+
 - **Bán Lại Vé:** List your ticket with max 110% of purchase price
 - **Tặng Vé:** Transfer for free (no marketplace fees)
 - **Mã QR:** Show at event entrance for verification
 - **Phí:** 10% marketplace + 5% organiser = 15% total on resales
 
 ### For Developers:
+
 - See inline JSDoc comments in all files
 - Check `useTicketManagement.ts` for hook usage
 - Review modal props interfaces
@@ -471,6 +516,7 @@ All modals are mobile-friendly:
 ## ✅ Week 3 Completion Status
 
 **All Features Implemented:**
+
 - ✅ My Tickets Page grid view
 - ✅ Filter: Upcoming / Past / All
 - ✅ Ticket details modal with QR code

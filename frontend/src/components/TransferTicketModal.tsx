@@ -285,7 +285,9 @@ export function TransferTicketModal({
                 </div>
 
                 <div>
-                  <p className="text-xs text-slate-500 mb-1">Đến (Người Nhận)</p>
+                  <p className="text-xs text-slate-500 mb-1">
+                    Đến (Người Nhận)
+                  </p>
                   <p className="font-mono text-sm text-green-600 break-all font-semibold">
                     {recipientAddress}
                   </p>
