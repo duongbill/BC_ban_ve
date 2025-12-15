@@ -1,9 +1,8 @@
 import React, {useState} from "react";
 import {useAccount} from "wagmi";
 import {useBiconomyAccount} from "@/hooks/useBiconomyAccount";
-import {useListTicketForSale} from "@/hooks/useTicketManagement";
-import {useMyTickets} from "@/hooks/useTicketManagement";
-import {Ticket} from "@/types";
+import {useListTicketForSale, useMyTickets, useUnlistTicket} from "@/hooks/useTicketManagement";
+import {Ticket, TicketMetadata} from "@/types";
 import {ipfsToHttp} from "@/services/ipfs";
 import toast from "react-hot-toast";
 import "../styles/my-tickets-page.css";
@@ -60,8 +59,23 @@ export function MyTicketsPage() {
         price: "",
     });
     const [activeFilter, setActiveFilter] = useState<string>("all");
+    const [resolvingMetadataId, setResolvingMetadataId] = useState<string | null>(null);
+    const [metadataModal, setMetadataModal] = useState<{
+        isOpen: boolean;
+        ticket: Ticket | null;
+        loading: boolean;
+        data: TicketMetadata | null;
+        url: string | null;
+    }>({
+        isOpen: false,
+        ticket: null,
+        loading: false,
+        data: null,
+        url: null,
+    });
 
     const listTicketMutation = useListTicketForSale();
+    const unlistTicketMutation = useUnlistTicket();
 
     // Fetch real tickets from blockchain using Query (real-time updates)
     // Use regular address to match with FestivalPage (which uses regular address for buying)
@@ -147,6 +161,35 @@ export function MyTicketsPage() {
                 console.error("Error details:", error.message);
             }
         }
+    };
+
+    const handleUnlistTicket = async (ticket: Ticket) => {
+        try {
+            await unlistTicketMutation.mutateAsync({
+                nftAddress: deployedAddresses.sampleNFT,
+                tokenId: ticket.tokenId,
+            });
+        } catch (error) {
+            console.error("Unlist ticket failed", error);
+        }
+    };
+
+    const handleViewMetadata = (ticket: Ticket) => {
+        // Demo mode: không fetch metadata thật, chỉ hiển thị link/IPFS URI
+        setResolvingMetadataId(ticket.id);
+
+        const url = ipfsToHttp(ticket.tokenURI);
+
+        setMetadataModal({
+            isOpen: true,
+            ticket,
+            loading: false,
+            data: null,
+            url,
+        });
+
+        // Ngay lập tức bỏ trạng thái loading trên nút
+        setResolvingMetadataId(null);
     };
 
     if (!smartAccountAddress && !address) {
@@ -354,7 +397,14 @@ export function MyTicketsPage() {
                     {filteredTickets && filteredTickets.length > 0 ? (
                         <div className="tickets-grid">
                             {filteredTickets.map((ticket) => (
-                                <TicketCard key={ticket.id} ticket={ticket} onSell={() => setSellModalData({ticket, price: ""})} />
+                                <TicketCard
+                                    key={ticket.id}
+                                    ticket={ticket}
+                                    onSell={() => setSellModalData({ticket, price: ""})}
+                                    onViewMetadata={handleViewMetadata}
+                                    onUnlist={handleUnlistTicket}
+                                    resolvingMetadataId={resolvingMetadataId}
+                                />
                             ))}
                         </div>
                     ) : (
@@ -405,6 +455,24 @@ export function MyTicketsPage() {
                         loading={listTicketMutation.isPending}
                     />
                 )}
+
+                {metadataModal.isOpen && metadataModal.ticket && (
+                    <MetadataPreviewModal
+                        ticket={metadataModal.ticket}
+                        metadata={metadataModal.data}
+                        url={metadataModal.url}
+                        loading={metadataModal.loading}
+                        onClose={() =>
+                            setMetadataModal({
+                                isOpen: false,
+                                ticket: null,
+                                loading: false,
+                                data: null,
+                                url: null,
+                            })
+                        }
+                    />
+                )}
             </main>
         </div>
     );
@@ -413,9 +481,12 @@ export function MyTicketsPage() {
 interface TicketCardProps {
     ticket: Ticket;
     onSell: () => void;
+    onViewMetadata: (ticket: Ticket) => void;
+    onUnlist: (ticket: Ticket) => void;
+    resolvingMetadataId: string | null;
 }
 
-function TicketCard({ticket, onSell}: TicketCardProps) {
+function TicketCard({ticket, onSell, onViewMetadata, onUnlist, resolvingMetadataId}: TicketCardProps) {
     const priceIncrease =
         ticket.isForSale && ticket.sellingPrice
             ? (((parseFloat(ticket.sellingPrice) - parseFloat(ticket.purchasePrice)) / parseFloat(ticket.purchasePrice)) * 100).toFixed(1)
@@ -498,20 +569,31 @@ function TicketCard({ticket, onSell}: TicketCardProps) {
                                 <span className="pulse-dot"></span>
                                 Đã niêm yết
                             </div>
-                            <button className="btn-remove-sale">❌ Gỡ bán</button>
+                            <button className="btn-remove-sale" onClick={() => onUnlist(ticket)}>
+                                ❌ Gỡ bán
+                            </button>
                         </div>
                     )}
 
-                    <button onClick={() => window.open(ipfsToHttp(ticket.tokenURI), "_blank")} className="btn-view-metadata">
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path
-                                strokeLinecap="round"
-                                strokeLinejoin="round"
-                                strokeWidth={2}
-                                d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"
-                            />
-                        </svg>
-                        Xem chi tiết
+                    <button onClick={() => onViewMetadata(ticket)} className="btn-view-metadata" disabled={resolvingMetadataId === ticket.id}>
+                        {resolvingMetadataId === ticket.id ? (
+                            <>
+                                <div className="loading-dot"></div>
+                                Đang mở...
+                            </>
+                        ) : (
+                            <>
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path
+                                        strokeLinecap="round"
+                                        strokeLinejoin="round"
+                                        strokeWidth={2}
+                                        d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"
+                                    />
+                                </svg>
+                                Xem chi tiết
+                            </>
+                        )}
                     </button>
                 </div>
             </div>
@@ -635,6 +717,84 @@ function SellTicketModal({ticket, price, onPriceChange, onClose, onConfirm, load
                     </button>
                     <button onClick={onConfirm} disabled={loading || !isValidPrice} className="btn-confirm">
                         {loading ? "Đang xử lý..." : "Niêm yết bán"}
+                    </button>
+                </div>
+            </div>
+        </div>
+    );
+}
+
+interface MetadataPreviewModalProps {
+    ticket: Ticket;
+    metadata: TicketMetadata | null;
+    url: string | null;
+    loading: boolean;
+    onClose: () => void;
+}
+
+function MetadataPreviewModal({ticket, metadata, url, loading, onClose}: MetadataPreviewModalProps) {
+    return (
+        <div className="metadata-modal-overlay">
+            <div className="metadata-modal">
+                <div className="metadata-modal-header">
+                    <div>
+                        <h3>Metadata vé #{ticket.tokenId}</h3>
+                        <p>{ticket.festival.name}</p>
+                    </div>
+                    <button className="metadata-close-btn" onClick={onClose}>
+                        ✕
+                    </button>
+                </div>
+
+                {loading ? (
+                    <div className="metadata-modal-loading">
+                        <div className="loading-spinner"></div>
+                        <p>Đang tải metadata từ IPFS...</p>
+                    </div>
+                ) : metadata ? (
+                    <div className="metadata-modal-body">
+                        {metadata.image && (
+                            <div className="metadata-image-wrapper">
+                                <img
+                                    src={
+                                        metadata.image.startsWith("ipfs://")
+                                            ? metadata.image.replace("ipfs://", "https://ipfs.io/ipfs/")
+                                            : metadata.image
+                                    }
+                                    alt={metadata.name || `Ticket #${ticket.tokenId}`}
+                                />
+                            </div>
+                        )}
+                        <div className="metadata-details">
+                            <h4>{metadata.name || `Ticket #${ticket.tokenId}`}</h4>
+                            {metadata.description && <p className="metadata-description">{metadata.description}</p>}
+
+                            {Array.isArray(metadata.attributes) && metadata.attributes.length > 0 && (
+                                <div className="metadata-attributes">
+                                    {metadata.attributes.map((attr, idx) => (
+                                        <div key={idx} className="metadata-attribute">
+                                            <span className="attr-trait">{attr.trait_type}</span>
+                                            <span className="attr-value">{String(attr.value)}</span>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                ) : (
+                    <div className="metadata-modal-loading">
+                        <p>Không đọc được metadata cho vé này.</p>
+                    </div>
+                )}
+
+                <div className="metadata-modal-footer">
+                    {url && (
+                        <button className="btn-open-ipfs" onClick={() => window.open(url, "_blank")}>
+                            Mở trên IPFS
+                        </button>
+                    )}
+                    <button className="btn-close-modal" onClick={onClose}>
+                        Đóng
                     </button>
                 </div>
             </div>
