@@ -458,6 +458,13 @@ export function FestivalPage() {
     const handleBuySecondaryTicket = async (ticket: Ticket) => {
         if (!festival || !ticket.sellingPrice) return;
 
+        console.log("🛒 Buy secondary ticket click:", {
+            ticketId: ticket.tokenId,
+            sellingPrice: ticket.sellingPrice,
+            festivalNft: festival.nftContract,
+            marketplace: festival.marketplace,
+        });
+
         try {
             await buySecondaryMutation.mutateAsync({
                 nftAddress: festival.nftContract,

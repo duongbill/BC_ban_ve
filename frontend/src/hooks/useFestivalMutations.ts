@@ -1,5 +1,5 @@
 import {useMutation, useQueryClient} from "@tanstack/react-query";
-import {useWaitForTransactionReceipt, useWriteContract, usePublicClient} from "wagmi";
+import {useWaitForTransactionReceipt, useWriteContract, usePublicClient, useAccount} from "wagmi";
 import {parseEther, encodeFunctionData} from "viem";
 import {useBiconomyAccount} from "./useBiconomyAccount";
 import {uploadMetadata} from "@/services/ipfs";
@@ -300,10 +300,13 @@ export function useBuyTicket() {
     });
 }
 
-// Hook for buying secondary tickets
 export function useBuySecondaryTicket() {
-    const {smartAccount, smartAccountAddress} = useBiconomyAccount();
+    // Dùng ví EOA hiện tại thay vì smart account (đảm bảo cùng nơi giữ FEST)
+    const {address} = useAccount();
+    const {writeContractAsync} = useWriteContract();
+    const publicClient = usePublicClient();
     const queryClient = useQueryClient();
+    console.log("🔍 useBuySecondaryTicket - buyer address (EOA):", address);
 
     return useMutation({
         mutationFn: async ({
@@ -319,54 +322,56 @@ export function useBuySecondaryTicket() {
             ticketId: number;
             price: string;
         }) => {
-            if (!smartAccount || !smartAccountAddress) {
-                throw new Error("Smart account not initialized");
+            if (!address) {
+                throw new Error("Wallet not connected");
             }
 
-            // 1. Create batch transaction data
-            const approveData = encodeFunctionData({
+            const amount = parseEther(price);
+
+            // 1) Approve FEST cho marketplace
+            const approveHash = await writeContractAsync({
+                address: tokenAddress as `0x${string}`,
                 abi: FEST_TOKEN_ABI,
                 functionName: "approve",
-                args: [marketplaceAddress as `0x${string}`, parseEther(price)],
+                args: [marketplaceAddress as `0x${string}`, amount],
             });
 
-            const buyData = encodeFunctionData({
+            if (publicClient) {
+                const approveReceipt = await publicClient.waitForTransactionReceipt({hash: approveHash});
+                if (approveReceipt.status !== "success") {
+                    throw new Error("Approve FEST failed");
+                }
+            }
+
+            // 2) Gọi buyFromCustomer
+            const buyHash = await writeContractAsync({
+                address: marketplaceAddress as `0x${string}`,
                 abi: MARKETPLACE_ABI,
                 functionName: "buyFromCustomer",
-                args: [nftAddress as `0x${string}`, BigInt(ticketId), smartAccountAddress as `0x${string}`],
+                args: [nftAddress as `0x${string}`, BigInt(ticketId), address as `0x${string}`],
             });
 
-            // 2. Create user operation with batch transactions
-            const userOp = await smartAccount.buildUserOp([
-                {
-                    to: tokenAddress,
-                    data: approveData,
-                    value: "0",
-                },
-                {
-                    to: marketplaceAddress,
-                    data: buyData,
-                    value: "0",
-                },
-            ]);
+            if (publicClient) {
+                const buyReceipt = await publicClient.waitForTransactionReceipt({hash: buyHash});
+                if (buyReceipt.status !== "success") {
+                    throw new Error("Buy transaction failed");
+                }
+            }
 
-            // 3. Send user operation
-            const userOpResponse = await smartAccount.sendUserOp(userOp);
-
-            // 4. Wait for transaction to be mined
-            const receipt = await userOpResponse.wait();
-
-            return receipt;
+            return {approveHash, buyHash};
         },
         onSuccess: () => {
-            // Invalidate all ticket-related queries to refresh the list
             queryClient.invalidateQueries({queryKey: ["tickets"]});
             queryClient.invalidateQueries({queryKey: ["myTickets"]});
             toast.success("Secondary ticket purchased successfully!");
         },
         onError: (error) => {
             console.error("Error buying secondary ticket:", error);
-            toast.error("Failed to purchase secondary ticket");
+            const message =
+                (error as any)?.shortMessage ||
+                (error as any)?.message ||
+                "Failed to purchase secondary ticket. Kiểm tra lại số dư FEST và bạn không mua vé của chính mình.";
+            toast.error(message);
         },
     });
 }
