@@ -4,14 +4,34 @@ import {useQuery} from "@tanstack/react-query";
 import {useAccount} from "wagmi";
 import {useBiconomyAccount} from "@/hooks/useBiconomyAccount";
 import {useBuyTicket, useBuySecondaryTicket} from "@/hooks/useFestivalMutations";
-import {useSecondaryMarketTickets} from "@/hooks/useTicketManagement";
+import {useSecondaryMarketTickets, NFT_ABI} from "@/hooks/useTicketManagement";
 import {uploadMetadata} from "@/services/ipfs";
 import {Festival, Ticket} from "@/types";
 import toast from "react-hot-toast";
 import "../styles/festival-page.css";
-
-// Import deployed addresses directly from JSON file
+import {usePublicClient} from "wagmi";
 import deployedAddresses from "../../../deployedAddresses.json";
+
+// FEST Token ABI for balance/allowance checks
+const FEST_TOKEN_ABI = [
+    {
+        name: "balanceOf",
+        type: "function",
+        stateMutability: "view",
+        inputs: [{name: "account", type: "address"}],
+        outputs: [{name: "", type: "uint256"}],
+    },
+    {
+        name: "allowance",
+        type: "function",
+        stateMutability: "view",
+        inputs: [
+            {name: "owner", type: "address"},
+            {name: "spender", type: "address"},
+        ],
+        outputs: [{name: "", type: "uint256"}],
+    },
+] as const;
 
 // Use deployed contract addresses from JSON file (more reliable than env vars)
 const DEPLOYED_NFT_ADDRESS = deployedAddresses.sampleNFT || "0x0000000000000000000000000000000000000000";
@@ -50,6 +70,76 @@ const mockFestivals: Record<string, Festival> = {
         organiser: DEPLOYED_ORGANISER_ADDRESS,
         totalTickets: 1200,
         ticketsForSale: 320,
+    },
+    "4": {
+        id: "4",
+        name: "Jazz Festival Hà Nội",
+        symbol: "JFHN",
+        nftContract: DEPLOYED_NFT_ADDRESS,
+        marketplace: DEPLOYED_MARKETPLACE_ADDRESS,
+        organiser: DEPLOYED_ORGANISER_ADDRESS,
+        totalTickets: 1500,
+        ticketsForSale: 180,
+    },
+    "5": {
+        id: "5",
+        name: "Rock Concert Sài Gòn",
+        symbol: "RCSG",
+        nftContract: DEPLOYED_NFT_ADDRESS,
+        marketplace: DEPLOYED_MARKETPLACE_ADDRESS,
+        organiser: DEPLOYED_ORGANISER_ADDRESS,
+        totalTickets: 2500,
+        ticketsForSale: 320,
+    },
+    "6": {
+        id: "6",
+        name: "EDM Festival Hồ Chí Minh",
+        symbol: "EDMHCM",
+        nftContract: DEPLOYED_NFT_ADDRESS,
+        marketplace: DEPLOYED_MARKETPLACE_ADDRESS,
+        organiser: DEPLOYED_ORGANISER_ADDRESS,
+        totalTickets: 5000,
+        ticketsForSale: 450,
+    },
+    "7": {
+        id: "7",
+        name: "Acoustic Night Đà Lạt",
+        symbol: "ANDL",
+        nftContract: DEPLOYED_NFT_ADDRESS,
+        marketplace: DEPLOYED_MARKETPLACE_ADDRESS,
+        organiser: DEPLOYED_ORGANISER_ADDRESS,
+        totalTickets: 800,
+        ticketsForSale: 95,
+    },
+    "8": {
+        id: "8",
+        name: "Hip Hop Show Hà Nội",
+        symbol: "HHSHN",
+        nftContract: DEPLOYED_NFT_ADDRESS,
+        marketplace: DEPLOYED_MARKETPLACE_ADDRESS,
+        organiser: DEPLOYED_ORGANISER_ADDRESS,
+        totalTickets: 1800,
+        ticketsForSale: 210,
+    },
+    "9": {
+        id: "9",
+        name: "Country Music Fest Nha Trang",
+        symbol: "CMFNT",
+        nftContract: DEPLOYED_NFT_ADDRESS,
+        marketplace: DEPLOYED_MARKETPLACE_ADDRESS,
+        organiser: DEPLOYED_ORGANISER_ADDRESS,
+        totalTickets: 1200,
+        ticketsForSale: 140,
+    },
+    "10": {
+        id: "10",
+        name: "Classical Music Night Huế",
+        symbol: "CMNH",
+        nftContract: DEPLOYED_NFT_ADDRESS,
+        marketplace: DEPLOYED_MARKETPLACE_ADDRESS,
+        organiser: DEPLOYED_ORGANISER_ADDRESS,
+        totalTickets: 600,
+        ticketsForSale: 75,
     },
 };
 
@@ -195,6 +285,244 @@ const FESTIVAL_TICKET_TYPES: Record<
             color: "linear-gradient(135deg, #8B5CF6 0%, #7C3AED 100%)",
         },
     ],
+    "4": [
+        {
+            id: "vip",
+            name: "VIP Jazz Lounge",
+            description: "Exclusive VIP area with premium seating, complimentary drinks, and meet & greet with artists",
+            price: "130",
+            icon: "🎷",
+            color: "linear-gradient(135deg, #1E3A8A 0%, #3B82F6 100%)",
+        },
+        {
+            id: "standard",
+            name: "Standard Ticket",
+            description: "General admission with access to all stages and performances",
+            price: "65",
+            icon: "🎺",
+            color: "linear-gradient(135deg, #4B5563 0%, #6B7280 100%)",
+        },
+        {
+            id: "student",
+            name: "Student Pass",
+            description: "Discounted rate for students with valid student ID",
+            price: "45",
+            icon: "🎓",
+            color: "linear-gradient(135deg, #7C3AED 0%, #A78BFA 100%)",
+        },
+        {
+            id: "early-bird",
+            name: "Early Bird",
+            description: "Special early bird pricing for advance purchases",
+            price: "55",
+            icon: "🐦",
+            color: "linear-gradient(135deg, #059669 0%, #10B981 100%)",
+        },
+    ],
+    "5": [
+        {
+            id: "front-row",
+            name: "Front Row",
+            description: "Closest to the stage, ultimate rock experience with premium sound",
+            price: "180",
+            icon: "🎸",
+            color: "linear-gradient(135deg, #DC2626 0%, #EF4444 100%)",
+        },
+        {
+            id: "mosh-pit",
+            name: "Mosh Pit",
+            description: "Standing area near the stage for the ultimate rock concert experience",
+            price: "120",
+            icon: "🤘",
+            color: "linear-gradient(135deg, #991B1B 0%, #DC2626 100%)",
+        },
+        {
+            id: "general",
+            name: "General Admission",
+            description: "Standard standing area with great view and sound",
+            price: "80",
+            icon: "🎵",
+            color: "linear-gradient(135deg, #4B5563 0%, #6B7280 100%)",
+        },
+        {
+            id: "balcony",
+            name: "Balcony View",
+            description: "Elevated seating with panoramic view of the stage",
+            price: "100",
+            icon: "🎪",
+            color: "linear-gradient(135deg, #7C2D12 0%, #F97316 100%)",
+        },
+    ],
+    "6": [
+        {
+            id: "vip",
+            name: "VIP Experience",
+            description: "VIP area with premium sound, private bar, and exclusive access",
+            price: "200",
+            icon: "🎧",
+            color: "linear-gradient(135deg, #7C3AED 0%, #A855F7 100%)",
+        },
+        {
+            id: "premium",
+            name: "Premium Floor",
+            description: "Premium standing area close to the main stage",
+            price: "150",
+            icon: "💿",
+            color: "linear-gradient(135deg, #6366F1 0%, #8B5CF6 100%)",
+        },
+        {
+            id: "general",
+            name: "General Admission",
+            description: "Access to all stages and festival areas",
+            price: "100",
+            icon: "🎹",
+            color: "linear-gradient(135deg, #3B82F6 0%, #60A5FA 100%)",
+        },
+        {
+            id: "early-bird",
+            name: "Early Bird",
+            description: "Special pricing for early ticket purchases",
+            price: "80",
+            icon: "⚡",
+            color: "linear-gradient(135deg, #F59E0B 0%, #FBBF24 100%)",
+        },
+    ],
+    "7": [
+        {
+            id: "vip",
+            name: "VIP Cozy Corner",
+            description: "Intimate VIP area with fireplace, premium seating, and complimentary hot drinks",
+            price: "90",
+            icon: "🔥",
+            color: "linear-gradient(135deg, #92400E 0%, #D97706 100%)",
+        },
+        {
+            id: "standard",
+            name: "Standard Ticket",
+            description: "General admission to the acoustic performances",
+            price: "50",
+            icon: "🎵",
+            color: "linear-gradient(135deg, #065F46 0%, #10B981 100%)",
+        },
+        {
+            id: "student",
+            name: "Student Pass",
+            description: "Discounted rate for students",
+            price: "35",
+            icon: "🎓",
+            color: "linear-gradient(135deg, #1E40AF 0%, #3B82F6 100%)",
+        },
+        {
+            id: "couple",
+            name: "Couple Package",
+            description: "Special package for couples with romantic seating",
+            price: "85",
+            icon: "💑",
+            color: "linear-gradient(135deg, #BE185D 0%, #EC4899 100%)",
+        },
+    ],
+    "8": [
+        {
+            id: "vip",
+            name: "VIP Backstage",
+            description: "VIP access with backstage pass, meet & greet, and exclusive merchandise",
+            price: "160",
+            icon: "🎤",
+            color: "linear-gradient(135deg, #1F2937 0%, #374151 100%)",
+        },
+        {
+            id: "front-stage",
+            name: "Front Stage",
+            description: "Standing area right in front of the stage",
+            price: "110",
+            icon: "🎵",
+            color: "linear-gradient(135deg, #7C2D12 0%, #DC2626 100%)",
+        },
+        {
+            id: "general",
+            name: "General Admission",
+            description: "Access to all performances and areas",
+            price: "75",
+            icon: "🎧",
+            color: "linear-gradient(135deg, #4B5563 0%, #6B7280 100%)",
+        },
+        {
+            id: "student",
+            name: "Student Pass",
+            description: "Special rate for students",
+            price: "50",
+            icon: "🎓",
+            color: "linear-gradient(135deg, #7C3AED 0%, #A78BFA 100%)",
+        },
+    ],
+    "9": [
+        {
+            id: "vip",
+            name: "VIP Beachfront",
+            description: "VIP area with beachfront view, private bar, and premium seating",
+            price: "140",
+            icon: "🏖️",
+            color: "linear-gradient(135deg, #F59E0B 0%, #FCD34D 100%)",
+        },
+        {
+            id: "premium",
+            name: "Premium Ticket",
+            description: "Premium seating with great view of the stage",
+            price: "95",
+            icon: "🎸",
+            color: "linear-gradient(135deg, #D97706 0%, #F59E0B 100%)",
+        },
+        {
+            id: "general",
+            name: "General Admission",
+            description: "Access to festival grounds and all stages",
+            price: "65",
+            icon: "🎵",
+            color: "linear-gradient(135deg, #059669 0%, #10B981 100%)",
+        },
+        {
+            id: "group",
+            name: "Group Ticket (4+)",
+            description: "Special group rate for 4 or more people",
+            price: "55",
+            icon: "👥",
+            color: "linear-gradient(135deg, #7C3AED 0%, #A78BFA 100%)",
+        },
+    ],
+    "10": [
+        {
+            id: "vip",
+            name: "VIP Royal Box",
+            description: "Exclusive VIP box with premium view, complimentary refreshments, and royal treatment",
+            price: "170",
+            icon: "👑",
+            color: "linear-gradient(135deg, #78350F 0%, #B45309 100%)",
+        },
+        {
+            id: "orchestra",
+            name: "Orchestra Seat",
+            description: "Best seats in the orchestra section with perfect acoustics",
+            price: "110",
+            icon: "🎼",
+            color: "linear-gradient(135deg, #1E40AF 0%, #3B82F6 100%)",
+        },
+        {
+            id: "balcony",
+            name: "Balcony Seat",
+            description: "Elevated view from balcony section",
+            price: "75",
+            icon: "🎭",
+            color: "linear-gradient(135deg, #4B5563 0%, #6B7280 100%)",
+        },
+        {
+            id: "student",
+            name: "Student Pass",
+            description: "Discounted rate for students",
+            price: "50",
+            icon: "🎓",
+            color: "linear-gradient(135deg, #7C3AED 0%, #A78BFA 100%)",
+        },
+    ],
 };
 
 // Fallback ticket types
@@ -205,6 +533,13 @@ const FESTIVAL_BANNERS: Record<string, string> = {
     "1": "/sai-gon-banner.webp", // Sài Gòn - Đêm nhạc sôi động
     "2": "/nha-hat-lon-ha-noi-banner.jpg", // Hà Nội - Nhà hát cổ điển, giao hưởng
     "3": "/da-nang-banner.jpg", // Đà Nẵng - Bãi biển, festival ngoài trời
+    "4": "/jazz-hn-banner.webp", // Jazz Festival Hà Nội
+    "5": "/rock-banner.webp", // Rock Concert Sài Gòn
+    "6": "/edm-banner.jpg", // EDM Festival Hồ Chí Minh
+    "7": "/acoustic-banner.jpg", // Acoustic Night Đà Lạt
+    "8": "/hiphop-banner.jpg", // Hip Hop Show Hà Nội
+    "9": "/nhatrang-banner.png", // Country Music Fest Nha Trang
+    "10": "/hue-banner.jpg", // Classical Music Night Huế
 };
 
 // Festival descriptions
@@ -245,6 +580,85 @@ const FESTIVAL_DESCRIPTIONS: Record<string, {description: string; features: stri
         location: "Bãi biển Mỹ Khê, Đà Nẵng",
         date: "20.02.2026",
     },
+    "4": {
+        description:
+            "Jazz Festival Hà Nội - Đắm chìm trong không gian jazz đầy cảm xúc với các nghệ sĩ jazz hàng đầu trong nước và quốc tế. Một đêm nhạc tinh tế với những giai điệu mượt mà, sâu lắng.",
+        features: [
+            "🎷 Dàn nhạc jazz chuyên nghiệp",
+            "🍷 Không gian sang trọng với bar cao cấp",
+            "🎹 Độc tấu piano và saxophone",
+            "✨ Không khí ấm cúng, thân mật",
+        ],
+        location: "Nhà hát Tuổi Trẻ, Hà Nội",
+        date: "10.03.2026",
+    },
+    "5": {
+        description:
+            "Rock Concert Sài Gòn - Bùng nổ với những giai điệu rock mạnh mẽ và đầy năng lượng. Trải nghiệm một đêm nhạc rock đích thực với các ban nhạc rock hàng đầu Việt Nam.",
+        features: [
+            "🎸 Các ban nhạc rock hàng đầu",
+            "🤘 Mosh pit và không khí sôi động",
+            "🎵 Hệ thống âm thanh cực mạnh",
+            "🔥 Hiệu ứng ánh sáng hoành tráng",
+        ],
+        location: "Sân vận động Quân khu 7, TP. HCM",
+        date: "25.03.2026",
+    },
+    "6": {
+        description:
+            "EDM Festival Hồ Chí Minh - Lễ hội âm nhạc điện tử lớn nhất năm với các DJ quốc tế hàng đầu. Hòa mình vào không khí EDM sôi động với ánh sáng laser và hiệu ứng đặc biệt.",
+        features: [
+            "🎧 Các DJ quốc tế hàng đầu",
+            "💿 Nhiều sân khấu EDM đa dạng",
+            "⚡ Hệ thống ánh sáng laser hiện đại",
+            "🍻 Khu bar và giải trí phong phú",
+        ],
+        location: "Khu vui chơi giải trí Landmark 81, TP. HCM",
+        date: "15.04.2026",
+    },
+    "7": {
+        description:
+            "Acoustic Night Đà Lạt - Đêm nhạc acoustic ấm áp giữa không gian núi rừng Đà Lạt. Thưởng thức những bản nhạc acoustic tình cảm trong không gian ấm cúng, thân mật.",
+        features: [
+            "🎵 Nhạc acoustic tình cảm, sâu lắng",
+            "🔥 Không gian ấm cúng với lò sưởi",
+            "☕ Đồ uống nóng miễn phí",
+            "🌲 Khung cảnh núi rừng lãng mạn",
+        ],
+        location: "Quán cà phê Tùng, Đà Lạt",
+        date: "05.05.2026",
+    },
+    "8": {
+        description:
+            "Hip Hop Show Hà Nội - Đêm nhạc hip hop đầy năng lượng với các rapper hàng đầu Việt Nam. Trải nghiệm văn hóa hip hop chân thực với beat mạnh mẽ và flow đỉnh cao.",
+        features: [
+            "🎤 Các rapper hàng đầu Việt Nam",
+            "🎧 Beat và flow đỉnh cao",
+            "💪 Không khí sôi động, đầy năng lượng",
+            "🎁 Merchandise độc quyền",
+        ],
+        location: "CLB Rock, Hà Nội",
+        date: "20.05.2026",
+    },
+    "9": {
+        description:
+            "Country Music Fest Nha Trang - Lễ hội nhạc đồng quê đầu tiên tại Việt Nam. Thưởng thức những giai điệu country đầy cảm xúc bên bãi biển Nha Trang tuyệt đẹp.",
+        features: ["🎸 Nhạc đồng quê chân thực", "🏖️ Sân khấu bãi biển độc đáo", "🌅 Hoàng hôn tuyệt đẹp", "🍔 Ẩm thực BBQ phong phú"],
+        location: "Bãi biển Nha Trang",
+        date: "10.06.2026",
+    },
+    "10": {
+        description:
+            "Classical Music Night Huế - Đêm nhạc cổ điển thanh lịch tại cố đô Huế. Trải nghiệm âm nhạc cổ điển đỉnh cao trong không gian di sản văn hóa độc đáo.",
+        features: [
+            "🎼 Dàn nhạc cổ điển chuyên nghiệp",
+            "🏛️ Không gian di sản văn hóa",
+            "🎹 Độc tấu piano và violin",
+            "✨ Không gian sang trọng, thanh lịch",
+        ],
+        location: "Nhà hát Duyệt Thị Đường, Huế",
+        date: "25.06.2026",
+    },
 };
 
 // Create a simple placeholder image as base64
@@ -274,6 +688,7 @@ export function FestivalPage() {
     const {id} = useParams<{id: string}>();
     const navigate = useNavigate();
     const {address} = useAccount();
+    const publicClient = usePublicClient();
     const {smartAccountAddress} = useBiconomyAccount();
 
     // IMPORTANT: For now, use regular address for buying tickets
@@ -456,13 +871,85 @@ export function FestivalPage() {
     };
 
     const handleBuySecondaryTicket = async (ticket: Ticket) => {
-        if (!festival || !ticket.sellingPrice) return;
+        if (!festival || !ticket.sellingPrice || !address || !publicClient) return;
+
+        const marketplace = festival.marketplace;
+        const ticketId = ticket.tokenId;
+        console.log("Buyer address:", address);
+
+        console.log("🔍 DEBUG BEFORE BUY SECONDARY");
+        const debugInfo = await Promise.all([
+            publicClient.readContract({
+                address: DEPLOYED_FEST_TOKEN_ADDRESS as `0x${string}`,
+                abi: FEST_TOKEN_ABI,
+                functionName: "balanceOf",
+                args: [address as `0x${string}`],
+            }),
+            publicClient.readContract({
+                address: DEPLOYED_FEST_TOKEN_ADDRESS as `0x${string}`,
+                abi: FEST_TOKEN_ABI,
+                functionName: "allowance",
+                args: [address as `0x${string}`, marketplace as `0x${string}`],
+            }),
+            publicClient.readContract({
+                address: DEPLOYED_NFT_ADDRESS as `0x${string}`,
+                abi: NFT_ABI,
+                functionName: "getTicketSellingPrice",
+                args: [ticketId],
+            }),
+            publicClient.readContract({
+                address: DEPLOYED_NFT_ADDRESS as `0x${string}`,
+                abi: NFT_ABI,
+                functionName: "ownerOf",
+                args: [ticketId],
+            }),
+            publicClient.readContract({
+                address: DEPLOYED_NFT_ADDRESS as `0x${string}`,
+                abi: NFT_ABI,
+                functionName: "isTicketForSale",
+                args: [ticketId],
+            }),
+        ]);
+
+        console.log({
+            buyerBalance: debugInfo[0],
+            allowance: debugInfo[1],
+            price: debugInfo[2],
+            owner: debugInfo[3],
+            forSale: debugInfo[4],
+        });
+
+        const buyerBalance = debugInfo[0] as bigint;
+        const allowance = debugInfo[1] as bigint;
+        const price = debugInfo[2] as bigint;
+        const owner = debugInfo[3] as string;
+        const forSale = debugInfo[4] as boolean;
+
+        if (buyerBalance < price) {
+            alert(`❌ Không đủ FEST (cần ${Number(price) / 1e18} FEST)`);
+            return;
+        }
+
+        if (allowance < price) {
+            alert("❌ Bạn chưa approve đủ FEST");
+            return;
+        }
+
+        if (!forSale) {
+            alert("❌ Vé không còn bán");
+            return;
+        }
+
+        if (owner.toLowerCase() === address.toLowerCase()) {
+            alert("❌ Không thể mua vé của chính bạn");
+            return;
+        }
 
         console.log("🛒 Buy secondary ticket click:", {
-            ticketId: ticket.tokenId,
+            ticketId,
             sellingPrice: ticket.sellingPrice,
             festivalNft: festival.nftContract,
-            marketplace: festival.marketplace,
+            marketplace,
         });
 
         try {
@@ -689,51 +1176,6 @@ export function FestivalPage() {
                             </div>
                         </div>
                     </div>
-                </div>
-
-                {/* Secondary Market Section */}
-                <div className="mt-4">
-                    <h2 className="card-title" style={{fontSize: "32px", marginBottom: "24px"}}>
-                        Thị trường vé thứ cấp
-                    </h2>
-
-                    {isLoadingSecondary ? (
-                        <div className="card text-center" style={{padding: "60px 40px"}}>
-                            <div className="loading-spinner mx-auto mb-4 w-12 h-12 border-4"></div>
-                            <p style={{color: "#888", fontSize: "16px"}}>Đang tải vé thứ cấp...</p>
-                        </div>
-                    ) : secondaryTickets && secondaryTickets.length > 0 ? (
-                        <div className="grid-3-cols">
-                            {secondaryTickets.map((ticket) => {
-                                const isOwnTicket = !!(currentUserAddress && ticket.owner.toLowerCase() === currentUserAddress);
-                                return (
-                                    <TicketCard
-                                        key={ticket.id}
-                                        ticket={ticket}
-                                        onBuy={() => handleBuySecondaryTicket(ticket)}
-                                        loading={buySecondaryMutation.isPending}
-                                        isOwnTicket={isOwnTicket}
-                                    />
-                                );
-                            })}
-                        </div>
-                    ) : (
-                        <div className="card text-center" style={{padding: "60px 40px"}}>
-                            <div style={{fontSize: "64px", marginBottom: "16px", opacity: 0.3}}>🎫</div>
-                            <p
-                                style={{
-                                    color: "#888",
-                                    marginBottom: "24px",
-                                    fontSize: "16px",
-                                }}
-                            >
-                                Chưa có vé nào trên thị trường thứ cấp
-                            </p>
-                            <button onClick={() => setShowBuyModal(true)} className="btn-primary">
-                                Mua vé sơ cấp
-                            </button>
-                        </div>
-                    )}
                 </div>
             </div>
 

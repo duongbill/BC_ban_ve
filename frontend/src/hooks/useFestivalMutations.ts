@@ -306,7 +306,6 @@ export function useBuySecondaryTicket() {
     const {writeContractAsync} = useWriteContract();
     const publicClient = usePublicClient();
     const queryClient = useQueryClient();
-    console.log("🔍 useBuySecondaryTicket - buyer address (EOA):", address);
 
     return useMutation({
         mutationFn: async ({

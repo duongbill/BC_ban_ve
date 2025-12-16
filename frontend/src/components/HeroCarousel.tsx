@@ -11,6 +11,13 @@ const FESTIVAL_IMAGES: Record<string, string> = {
     "1": "/sai-gon-banner.webp", // Sài Gòn
     "2": "/nha-hat-lon-ha-noi-banner.jpg", // Hà Nội
     "3": "/da-nang-banner.jpg", // Đà Nẵng
+    "4": "/trai.png", // Jazz Festival Hà Nội
+    "5": "/trai.png", // Rock Concert Sài Gòn
+    "6": "/trai.png", // EDM Festival Hồ Chí Minh
+    "7": "/trai.png", // Acoustic Night Đà Lạt
+    "8": "/trai.png", // Hip Hop Show Hà Nội
+    "9": "/trai.png", // Country Music Fest Nha Trang
+    "10": "/trai.png", // Classical Music Night Huế
 };
 
 // Fallback image nếu không tìm thấy
@@ -19,7 +26,7 @@ const DEFAULT_FESTIVAL_IMAGE = "/trai.png";
 export function HeroCarousel({festivals}: HeroCarouselProps) {
     const [currentSlide, setCurrentSlide] = useState(0);
     const navigate = useNavigate();
-    const featuredFestivals = festivals.slice(0, 3);
+    const featuredFestivals = festivals.slice(0, 4);
 
     useEffect(() => {
         const interval = setInterval(() => {
