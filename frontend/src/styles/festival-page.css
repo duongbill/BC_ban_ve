@@ -434,10 +434,11 @@ textarea.input-field {
     border: 1px solid var(--color-border);
     border-radius: 16px;
     padding: 32px;
-    max-width: 500px;
-    width: 100%;
+    max-width: 1000px;
+    width: 90%;
     box-shadow: var(--shadow-lg);
     animation: modalSlideIn 0.2s ease-out;
+    overflow: visible;
 }
 
 @keyframes modalSlideIn {
