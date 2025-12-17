@@ -1,5 +1,3 @@
-import React from "react";
-
 export function HeroSection() {
   return (
     <div className="relative overflow-hidden bg-gradient-to-br from-blue-600 via-indigo-700 to-purple-800 min-h-[600px]">

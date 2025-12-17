@@ -1,4 +1,3 @@
-import React from "react";
 import { Festival } from "@/types";
 import { FestivalCard } from "./FestivalCard";
 

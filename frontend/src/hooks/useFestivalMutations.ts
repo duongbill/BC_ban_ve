@@ -1,27 +1,9 @@
 import {useMutation, useQueryClient} from "@tanstack/react-query";
-import {useWaitForTransactionReceipt, useWriteContract, usePublicClient, useAccount} from "wagmi";
+import {useWriteContract, usePublicClient, useAccount} from "wagmi";
 import {parseEther, encodeFunctionData} from "viem";
 import {useBiconomyAccount} from "./useBiconomyAccount";
 import {uploadMetadata} from "@/services/ipfs";
 import toast from "react-hot-toast";
-
-// ABI fragments for contract interactions
-const FACTORY_ABI = [
-    {
-        name: "createNewFest",
-        type: "function",
-        stateMutability: "nonpayable",
-        inputs: [
-            {name: "name", type: "string"},
-            {name: "symbol", type: "string"},
-            {name: "organiser", type: "address"},
-        ],
-        outputs: [
-            {name: "nftContract", type: "address"},
-            {name: "marketplaceContract", type: "address"},
-        ],
-    },
-] as const;
 
 const MARKETPLACE_ABI = [
     {
@@ -366,11 +348,15 @@ export function useBuySecondaryTicket() {
         },
         onError: (error) => {
             console.error("Error buying secondary ticket:", error);
+            const rawMessage = (error as any)?.shortMessage || (error as any)?.message || "";
+            const hint =
+                rawMessage.includes("Internal JSON-RPC error") || rawMessage.includes("execution reverted")
+                    ? "\n\n💡 Gợi ý: Nếu mua vé bán lại bị revert, thường do seller chưa approve NFT cho marketplace (marketplace cần quyền safeTransferFrom)."
+                    : "";
             const message =
-                (error as any)?.shortMessage ||
-                (error as any)?.message ||
+                rawMessage ||
                 "Failed to purchase secondary ticket. Kiểm tra lại số dư FEST và bạn không mua vé của chính mình.";
-            toast.error(message);
+            toast.error(message + hint);
         },
     });
 }

@@ -40,20 +40,30 @@ contract FestiveTicketsFactory is Ownable, ReentrancyGuard, Pausable {
      * @param name Name of the festival NFT collection
      * @param symbol Symbol of the festival NFT collection
      * @param organiser Address of the festival organiser
+     * @param maxTicketsPerWallet Maximum tickets per wallet (0 = unlimited)
+     * @param maxResalePercentage Maximum resale percentage (e.g., 110 = 110%)
      * @return nftContract Address of the created NFT contract
      * @return marketplaceContract Address of the created marketplace contract
      */
     function createFestival(
         string memory name, 
         string memory symbol,
-        address organiser
+        address organiser,
+        uint256 maxTicketsPerWallet,
+        uint256 maxResalePercentage
     ) external nonReentrant whenNotPaused returns (address nftContract, address marketplaceContract) {
         require(organiser != address(0), "Invalid organiser address");
         require(bytes(name).length > 0, "Name cannot be empty");
         require(bytes(symbol).length > 0, "Symbol cannot be empty");
         
-        // Create NFT contract
-        FestivalNFT newNFT = new FestivalNFT(name, symbol, organiser);
+        // Create NFT contract with anti-scalping features
+        FestivalNFT newNFT = new FestivalNFT(
+            name, 
+            symbol, 
+            organiser, 
+            maxTicketsPerWallet, 
+            maxResalePercentage
+        );
         nftContract = address(newNFT);
         
         // Create Marketplace contract

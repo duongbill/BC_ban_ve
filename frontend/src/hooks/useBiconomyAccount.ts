@@ -43,11 +43,11 @@ export function useBiconomyAccount(): SmartAccountData {
       // Create Smart Account
       const smartAccount = await BiconomySmartAccountV2.create({
         chainId: chainId,
-        bundler: bundler,
+        bundler: bundler as any,
         paymaster: paymaster,
         entryPointAddress: DEFAULT_ENTRYPOINT_ADDRESS,
-        defaultValidationModule: module,
-        activeValidationModule: module,
+        defaultValidationModule: module as any,
+        activeValidationModule: module as any,
       });
 
       const address = await smartAccount.getAccountAddress();

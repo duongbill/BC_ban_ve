@@ -21,6 +21,12 @@ contract FestivalNFT is ERC721URIStorage, AccessControl, ReentrancyGuard, Pausab
     EventStatus public eventStatus;
     address public organiser;
     
+    // Anti-scalping: Maximum tickets per wallet (0 = unlimited)
+    uint256 public maxTicketsPerWallet;
+    
+    // Resale price ceiling: Maximum percentage above purchase price (e.g., 110 = 110%)
+    uint256 public maxResalePercentage;
+    
     // Mapping from token ID to purchase price
     mapping(uint256 => uint256) private _ticketPurchasePrice;
     // Mapping from token ID to selling price
@@ -41,10 +47,19 @@ contract FestivalNFT is ERC721URIStorage, AccessControl, ReentrancyGuard, Pausab
     event TicketTransferred(uint256 indexed tokenId, address indexed from, address indexed to, bool isGift);
     event EventStatusChanged(EventStatus indexed oldStatus, EventStatus indexed newStatus);
     event RefundIssued(uint256 indexed tokenId, address indexed owner, uint256 amount);
+    event MaxTicketsPerWalletUpdated(uint256 indexed oldMax, uint256 indexed newMax);
+    event MaxResalePercentageUpdated(uint256 indexed oldPercentage, uint256 indexed newPercentage);
 
-    constructor(string memory name, string memory symbol, address admin) 
-        ERC721(name, symbol) {
+    constructor(
+        string memory name, 
+        string memory symbol, 
+        address admin,
+        uint256 _maxTicketsPerWallet,
+        uint256 _maxResalePercentage
+    ) ERC721(name, symbol) {
         require(admin != address(0), "Invalid admin address");
+        require(_maxResalePercentage >= 100, "Max resale % must be >= 100");
+        
         organiser = admin;
         _grantRole(DEFAULT_ADMIN_ROLE, admin);
         _grantRole(DEFAULT_ADMIN_ROLE, msg.sender);
@@ -52,6 +67,8 @@ contract FestivalNFT is ERC721URIStorage, AccessControl, ReentrancyGuard, Pausab
         _grantRole(VERIFIER_ROLE, admin);
         _currentTokenId = 0;
         eventStatus = EventStatus.ACTIVE;
+        maxTicketsPerWallet = _maxTicketsPerWallet;
+        maxResalePercentage = _maxResalePercentage;
     }
     
     /**
@@ -75,6 +92,11 @@ contract FestivalNFT is ERC721URIStorage, AccessControl, ReentrancyGuard, Pausab
     ) external nonReentrant onlyRole(MINTER_ROLE) whenNotPaused returns (uint256) {
         require(eventStatus == EventStatus.ACTIVE, "Event not active");
         
+        // Check max tickets per wallet limit
+        if (maxTicketsPerWallet > 0) {
+            require(balanceOf(to) < maxTicketsPerWallet, "Wallet ticket limit reached");
+        }
+        
         uint256 tokenId = _nextTokenId();
         _mint(to, tokenId);
         _setTokenURI(tokenId, tokenURI);
@@ -97,6 +119,14 @@ contract FestivalNFT is ERC721URIStorage, AccessControl, ReentrancyGuard, Pausab
     ) external nonReentrant onlyRole(MINTER_ROLE) whenNotPaused returns (uint256[] memory) {
         require(eventStatus == EventStatus.ACTIVE, "Event not active");
         require(tokenURIs.length > 0 && tokenURIs.length <= 10, "Invalid batch size");
+        
+        // Check max tickets per wallet limit
+        if (maxTicketsPerWallet > 0) {
+            require(
+                balanceOf(to) + tokenURIs.length <= maxTicketsPerWallet, 
+                "Batch would exceed wallet ticket limit"
+            );
+        }
         
         uint256[] memory tokenIds = new uint256[](tokenURIs.length);
         
@@ -124,8 +154,8 @@ contract FestivalNFT is ERC721URIStorage, AccessControl, ReentrancyGuard, Pausab
         require(!_isVerified[tokenId], "Ticket already used");
         
         uint256 purchasePrice = _ticketPurchasePrice[tokenId];
-        uint256 maxAllowed = (purchasePrice * 110) / 100; // 110% of purchase price
-        require(sellingPrice <= maxAllowed, "Price exceeds 110% limit");
+        uint256 maxAllowed = (purchasePrice * maxResalePercentage) / 100;
+        require(sellingPrice <= maxAllowed, "Price exceeds resale limit");
         
         _ticketSellingPrice[tokenId] = sellingPrice;
         _isForSale[tokenId] = true;
@@ -300,6 +330,38 @@ contract FestivalNFT is ERC721URIStorage, AccessControl, ReentrancyGuard, Pausab
      */
     function getTotalMinted() external view returns (uint256) {
         return _currentTokenId;
+    }
+
+    /**
+     * @dev Update maximum tickets per wallet (anti-scalping)
+     * @param newMax New maximum (0 = unlimited)
+     */
+    function setMaxTicketsPerWallet(uint256 newMax) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        uint256 oldMax = maxTicketsPerWallet;
+        maxTicketsPerWallet = newMax;
+        emit MaxTicketsPerWalletUpdated(oldMax, newMax);
+    }
+
+    /**
+     * @dev Update maximum resale percentage
+     * @param newPercentage New percentage (e.g., 110 = 110%)
+     */
+    function setMaxResalePercentage(uint256 newPercentage) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        require(newPercentage >= 100, "Percentage must be >= 100");
+        uint256 oldPercentage = maxResalePercentage;
+        maxResalePercentage = newPercentage;
+        emit MaxResalePercentageUpdated(oldPercentage, newPercentage);
+    }
+
+    /**
+     * @dev Get maximum allowed resale price for a ticket
+     * @param tokenId Token ID to check
+     * @return Maximum resale price allowed
+     */
+    function getMaxResalePrice(uint256 tokenId) external view returns (uint256) {
+        require(_ownerOf(tokenId) != address(0), "Token does not exist");
+        uint256 purchasePrice = _ticketPurchasePrice[tokenId];
+        return (purchasePrice * maxResalePercentage) / 100;
     }
 
     /**

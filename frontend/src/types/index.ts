@@ -7,6 +7,9 @@ export interface Festival {
   organiser: string;
   totalTickets?: number;
   ticketsForSale?: number;
+  maxTicketsPerWallet?: number;
+  maxResalePercentage?: number;
+  royaltyPercentage?: number;
 }
 
 export interface Ticket {
@@ -15,6 +18,7 @@ export interface Ticket {
   tokenURI: string;
   purchasePrice: string;
   sellingPrice?: string;
+  maxResalePrice?: string;
   isForSale: boolean;
   owner: string;
   festival: Festival;

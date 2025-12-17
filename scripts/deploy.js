@@ -5,7 +5,8 @@ const path = require("path");
 async function main() {
   console.log("\n🚀 Starting deployment...\n");
 
-  const [deployer] = await hre.ethers.getSigners();
+  const signers = await hre.ethers.getSigners();
+  const [deployer] = signers;
   console.log("📝 Deploying contracts with account:", deployer.address);
   console.log(
     "💰 Account balance:",
@@ -33,6 +34,15 @@ async function main() {
   await festToken.mint(deployer.address, mintAmount);
   console.log("   💵 Minting 10,000 FEST to organiser...");
   await festToken.mint(organiser, mintAmount);
+
+  // Mint tokens to Hardhat accounts #10-#19 (useful for secondary market testing)
+  console.log("   💵 Minting 10,000 FEST to accounts #10-#19...");
+  for (let i = 10; i <= 19; i++) {
+    const addr = signers[i]?.address;
+    if (addr) {
+      await festToken.mint(addr, mintAmount);
+    }
+  }
   console.log("   ✅ Tokens minted\n");
 
   // 2. Deploy Factory
@@ -43,38 +53,82 @@ async function main() {
   const factoryAddress = await factory.getAddress();
   console.log("   ✅ Factory deployed to:", factoryAddress, "\n");
 
-  // 3. Create sample festival through factory (uses FestivalNFTv2)
-  console.log("3️⃣  Creating sample festival...");
-  const tx = await factory.createFestival(
-    "Summer Music Festival",
-    "SUMMER",
-    organiser
-  );
-  const receipt = await tx.wait();
+  // 3. Create sample festival(s) through factory
+  console.log("3️⃣  Creating sample festivals...");
 
-  // Find FestivalCreated event
-  const event = receipt.logs.find((log) => {
-    try {
-      const parsed = factory.interface.parseLog(log);
-      return parsed && parsed.name === "FestivalCreated";
-    } catch {
-      return false;
+  const festivalDefs = [
+    {
+      id: "1",
+      name: "Đêm Nhạc Sài Gòn 2025",
+      symbol: "SGM",
+      maxTicketsPerWallet: 5,
+      maxResalePercentage: 110,
+    },
+    {
+      id: "2",
+      name: "Hòa Nhạc Giao Hưởng Hà Nội",
+      symbol: "HNH",
+      maxTicketsPerWallet: 3,
+      maxResalePercentage: 115,
+    },
+    {
+      id: "3",
+      name: "Lễ Hội Âm Nhạc Đà Nẵng",
+      symbol: "DND",
+      maxTicketsPerWallet: 10,
+      maxResalePercentage: 120,
+    },
+  ];
+
+  const createdFestivals = [];
+
+  for (const def of festivalDefs) {
+    const tx = await factory.createFestival(
+      def.name,
+      def.symbol,
+      organiser,
+      def.maxTicketsPerWallet,
+      def.maxResalePercentage
+    );
+    const receipt = await tx.wait();
+
+    // Find FestivalCreated event
+    const event = receipt.logs.find((log) => {
+      try {
+        const parsed = factory.interface.parseLog(log);
+        return parsed && parsed.name === "FestivalCreated";
+      } catch {
+        return false;
+      }
+    });
+
+    if (!event) {
+      throw new Error("FestivalCreated event not found");
     }
-  });
 
-  if (!event) {
-    throw new Error("FestivalCreated event not found");
+    const parsedEvent = factory.interface.parseLog(event);
+    const nftContract = parsedEvent.args[0];
+    const marketplace = parsedEvent.args[1];
+
+    createdFestivals.push({
+      id: def.id,
+      name: def.name,
+      symbol: def.symbol,
+      organiser,
+      nftContract,
+      marketplace,
+      maxTicketsPerWallet: def.maxTicketsPerWallet,
+      maxResalePercentage: def.maxResalePercentage,
+      royaltyPercentage: 5,
+    });
+
+    console.log(`   ✅ Festival ${def.symbol} NFT:`, nftContract);
+    console.log(`   ✅ Festival ${def.symbol} Marketplace:`, marketplace);
   }
 
-  const parsedEvent = factory.interface.parseLog(event);
-  const sampleNFTAddress = parsedEvent.args[0];
-  const sampleMarketplaceAddress = parsedEvent.args[1];
-
-  console.log("   ✅ Sample NFT deployed to:", sampleNFTAddress);
-  console.log(
-    "   ✅ Sample Marketplace deployed to:",
-    sampleMarketplaceAddress
-  );
+  // Keep legacy fields for frontend scripts that expect sample addresses
+  const sampleNFTAddress = createdFestivals[0].nftContract;
+  const sampleMarketplaceAddress = createdFestivals[0].marketplace;
 
   console.log(
     "   ℹ️  VERIFIER_ROLE already granted to organiser (admin) by default\n"
@@ -89,6 +143,7 @@ async function main() {
     sampleMarketplace: sampleMarketplaceAddress,
     organiser: organiser,
     version: "v2",
+    festivals: createdFestivals,
   };
 
   const deploymentPath = path.join(__dirname, "..", "deployedAddresses.json");

@@ -1,6 +1,5 @@
-import React, { useState, useEffect } from "react";
+import { useState, useEffect } from "react";
 import { Ticket } from "@/types";
-import { parseEther, formatEther } from "viem";
 import toast from "react-hot-toast";
 
 interface ResellTicketModalProps {
@@ -38,7 +37,8 @@ export function ResellTicketModal({
   if (!isOpen || !ticket) return null;
 
   const purchasePrice = parseFloat(ticket.purchasePrice);
-  const maxPrice = purchasePrice * 1.1;
+  const maxResalePercentage = ticket.festival.maxResalePercentage || 110;
+  const maxPrice = purchasePrice * (maxResalePercentage / 100);
   const currentPrice = price ? parseFloat(price) : 0;
   const profit = currentPrice - purchasePrice;
   const isValidPrice = currentPrice > 0 && currentPrice <= maxPrice;
@@ -104,7 +104,9 @@ export function ResellTicketModal({
               </span>
             </div>
             <div className="flex justify-between items-center">
-              <span className="text-sm text-slate-600">Giá Tối Đa (110%)</span>
+              <span className="text-sm text-slate-600">
+                Giá Tối Đa ({maxResalePercentage}%)
+              </span>
               <span className="text-lg font-bold text-orange-600">
                 {maxPrice.toFixed(2)} FEST
               </span>

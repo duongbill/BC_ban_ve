@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import { useState } from "react";
 import { Ticket } from "@/types";
 import { isAddress } from "viem";
 import toast from "react-hot-toast";

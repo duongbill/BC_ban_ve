@@ -1,4 +1,4 @@
-import {NFTStorage, File} from "nft.storage";
+import { NFTStorage } from "nft.storage";
 import {TicketMetadata} from "@/types";
 
 // Check if we have a valid API key, otherwise use mock mode

@@ -1,4 +1,3 @@
-import React from "react";
 import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
 import { Toaster } from "react-hot-toast";
 import { Web3Provider } from "@/config/Web3Provider";
@@ -6,6 +5,7 @@ import { Navigation } from "@/components/Navigation";
 import { HomePage } from "@/pages/HomePage";
 import { FestivalPage } from "@/pages/FestivalPage";
 import { MyTicketsPage } from "@/pages/MyTicketsPage";
+import { SecondaryMarketPage } from "@/pages/SecondaryMarketPage";
 
 function App() {
   return (
@@ -18,6 +18,10 @@ function App() {
             <Routes>
               <Route path="/" element={<HomePage />} />
               <Route path="/festival/:id" element={<FestivalPage />} />
+              <Route
+                path="/secondary-market"
+                element={<SecondaryMarketPage />}
+              />
               <Route path="/my-tickets" element={<MyTicketsPage />} />
               <Route
                 path="*"

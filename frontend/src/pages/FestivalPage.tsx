@@ -11,7 +11,6 @@ import {
   useSecondaryMarketTickets,
   NFT_ABI,
 } from "@/hooks/useTicketManagement";
-import { uploadMetadata } from "@/services/ipfs";
 import { Festival, Ticket } from "@/types";
 import toast from "react-hot-toast";
 import "../styles/festival-page.css";
@@ -61,6 +60,9 @@ const mockFestivals: Record<string, Festival> = {
     organiser: DEPLOYED_ORGANISER_ADDRESS,
     totalTickets: 1000,
     ticketsForSale: 250,
+    maxTicketsPerWallet: 5,
+    maxResalePercentage: 110,
+    royaltyPercentage: 5,
   },
   "2": {
     id: "2",
@@ -71,6 +73,9 @@ const mockFestivals: Record<string, Festival> = {
     organiser: DEPLOYED_ORGANISER_ADDRESS,
     totalTickets: 800,
     ticketsForSale: 180,
+    maxTicketsPerWallet: 3,
+    maxResalePercentage: 115,
+    royaltyPercentage: 5,
   },
   "3": {
     id: "3",
@@ -81,6 +86,9 @@ const mockFestivals: Record<string, Festival> = {
     organiser: DEPLOYED_ORGANISER_ADDRESS,
     totalTickets: 1200,
     ticketsForSale: 320,
+    maxTicketsPerWallet: 10,
+    maxResalePercentage: 120,
+    royaltyPercentage: 5,
   },
   "4": {
     id: "4",
@@ -91,6 +99,9 @@ const mockFestivals: Record<string, Festival> = {
     organiser: DEPLOYED_ORGANISER_ADDRESS,
     totalTickets: 1500,
     ticketsForSale: 180,
+    maxTicketsPerWallet: 4,
+    maxResalePercentage: 110,
+    royaltyPercentage: 5,
   },
   "5": {
     id: "5",
@@ -101,6 +112,9 @@ const mockFestivals: Record<string, Festival> = {
     organiser: DEPLOYED_ORGANISER_ADDRESS,
     totalTickets: 2500,
     ticketsForSale: 320,
+    maxTicketsPerWallet: 6,
+    maxResalePercentage: 110,
+    royaltyPercentage: 5,
   },
   "6": {
     id: "6",
@@ -111,6 +125,9 @@ const mockFestivals: Record<string, Festival> = {
     organiser: DEPLOYED_ORGANISER_ADDRESS,
     totalTickets: 5000,
     ticketsForSale: 450,
+    maxTicketsPerWallet: 8,
+    maxResalePercentage: 115,
+    royaltyPercentage: 5,
   },
   "7": {
     id: "7",
@@ -121,6 +138,9 @@ const mockFestivals: Record<string, Festival> = {
     organiser: DEPLOYED_ORGANISER_ADDRESS,
     totalTickets: 800,
     ticketsForSale: 95,
+    maxTicketsPerWallet: 2,
+    maxResalePercentage: 105,
+    royaltyPercentage: 5,
   },
   "8": {
     id: "8",
@@ -131,6 +151,9 @@ const mockFestivals: Record<string, Festival> = {
     organiser: DEPLOYED_ORGANISER_ADDRESS,
     totalTickets: 1800,
     ticketsForSale: 210,
+    maxTicketsPerWallet: 5,
+    maxResalePercentage: 110,
+    royaltyPercentage: 5,
   },
   "9": {
     id: "9",
@@ -693,47 +716,6 @@ const FESTIVAL_DESCRIPTIONS: Record<
   },
 };
 
-// Create a simple placeholder image as base64
-const createPlaceholderImage = (color: string): File => {
-  // Create a small canvas
-  const canvas = document.createElement("canvas");
-  canvas.width = 400;
-  canvas.height = 400;
-  const ctx = canvas.getContext("2d");
-
-  if (ctx) {
-    // Fill with gradient
-    const gradient = ctx.createLinearGradient(0, 0, 400, 400);
-    gradient.addColorStop(
-      0,
-      color === "vip"
-        ? "#FFD700"
-        : color === "standard"
-        ? "#667eea"
-        : color === "early-bird"
-        ? "#f093fb"
-        : "#4facfe"
-    );
-    gradient.addColorStop(
-      1,
-      color === "vip"
-        ? "#FFA500"
-        : color === "standard"
-        ? "#764ba2"
-        : color === "early-bird"
-        ? "#f5576c"
-        : "#00f2fe"
-    );
-    ctx.fillStyle = gradient;
-    ctx.fillRect(0, 0, 400, 400);
-  }
-
-  // Convert to blob then file
-  return new File([canvas.toDataURL()], `${color}-ticket.png`, {
-    type: "image/png",
-  });
-};
-
 export function FestivalPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -812,6 +794,10 @@ export function FestivalPage() {
       festival: mockFestival,
     }));
   }, [blockchainSecondaryTickets]);
+
+  const secondaryTicketsForSale = React.useMemo(() => {
+    return secondaryTickets.filter((ticket) => ticket.isForSale);
+  }, [secondaryTickets]);
 
   const handleBuyPrimaryTicket = async () => {
     if (!buyerAddress) {
@@ -976,6 +962,26 @@ export function FestivalPage() {
         functionName: "isTicketForSale",
         args: [ticketId],
       }),
+      publicClient.readContract({
+        address: DEPLOYED_NFT_ADDRESS as `0x${string}`,
+        abi: NFT_ABI,
+        functionName: "getApproved",
+        args: [ticketId],
+      }),
+      publicClient.readContract({
+        address: DEPLOYED_NFT_ADDRESS as `0x${string}`,
+        abi: NFT_ABI,
+        functionName: "isApprovedForAll",
+        args: [
+          (await publicClient.readContract({
+            address: DEPLOYED_NFT_ADDRESS as `0x${string}`,
+            abi: NFT_ABI,
+            functionName: "ownerOf",
+            args: [ticketId],
+          })) as `0x${string}`,
+          marketplace as `0x${string}`,
+        ],
+      }),
     ]);
 
     console.log({
@@ -984,6 +990,8 @@ export function FestivalPage() {
       price: debugInfo[2],
       owner: debugInfo[3],
       forSale: debugInfo[4],
+      approved: debugInfo[5],
+      approvedForAll: debugInfo[6],
     });
 
     const buyerBalance = debugInfo[0] as bigint;
@@ -991,6 +999,8 @@ export function FestivalPage() {
     const price = debugInfo[2] as bigint;
     const owner = debugInfo[3] as string;
     const forSale = debugInfo[4] as boolean;
+    const approved = debugInfo[5] as string;
+    const approvedForAll = debugInfo[6] as boolean;
 
     if (buyerBalance < price) {
       alert(`❌ Không đủ FEST (cần ${Number(price) / 1e18} FEST)`);
@@ -1009,6 +1019,16 @@ export function FestivalPage() {
 
     if (owner.toLowerCase() === address.toLowerCase()) {
       alert("❌ Không thể mua vé của chính bạn");
+      return;
+    }
+
+    const isMarketplaceApproved =
+      approved?.toLowerCase?.() === marketplace.toLowerCase() || approvedForAll;
+    if (!isMarketplaceApproved) {
+      alert(
+        "❌ Vé này chưa được seller approve cho marketplace.\n" +
+          "Seller cần niêm yết vé (bán lại) và approve marketplace để marketplace có thể chuyển NFT khi bán."
+      );
       return;
     }
 
@@ -1258,6 +1278,48 @@ export function FestivalPage() {
                 </div>
               </div>
             </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Secondary Market Tickets Section */}
+      <div className="festival-page-container" style={{ marginTop: "24px" }}>
+        <div className="card mb-3">
+          <h2 className="card-title">Vé đang bán lại</h2>
+          <div className="card-content">
+            {isLoadingSecondary ? (
+              <div style={{ padding: "16px 0", color: "#888" }}>
+                Đang tải danh sách vé...
+              </div>
+            ) : secondaryTicketsForSale.length === 0 ? (
+              <div style={{ padding: "16px 0", color: "#888" }}>
+                Chưa có vé bán lại cho sự kiện này.
+              </div>
+            ) : (
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))",
+                  gap: "16px",
+                }}
+              >
+                {secondaryTicketsForSale.map((ticket) => {
+                  const isOwnTicket =
+                    !!currentUserAddress &&
+                    ticket.owner.toLowerCase() === currentUserAddress;
+
+                  return (
+                    <TicketCard
+                      key={ticket.id}
+                      ticket={ticket}
+                      loading={buySecondaryMutation.isPending}
+                      isOwnTicket={isOwnTicket}
+                      onBuy={() => handleBuySecondaryTicket(ticket)}
+                    />
+                  );
+                })}
+              </div>
+            )}
           </div>
         </div>
       </div>

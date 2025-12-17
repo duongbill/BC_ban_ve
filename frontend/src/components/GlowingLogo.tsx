@@ -1,5 +1,3 @@
-import React from "react";
-
 export function GlowingLogo() {
   return (
     <div className="portal-logo animate-fade-in-up">

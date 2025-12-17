@@ -1,4 +1,4 @@
-import React from "react";
+import type React from "react";
 import { Festival } from "@/types";
 
 interface FestivalCardProps {
@@ -6,16 +6,6 @@ interface FestivalCardProps {
 }
 
 export function FestivalCard({ festival }: FestivalCardProps) {
-  const gradients = [
-    "from-blue-500 via-cyan-500 to-teal-500",
-    "from-purple-500 via-pink-500 to-rose-500",
-    "from-orange-500 via-red-500 to-pink-500",
-    "from-green-500 via-emerald-500 to-teal-500",
-    "from-indigo-500 via-purple-500 to-pink-500",
-  ];
-  const randomGradient =
-    gradients[Math.floor(Math.random() * gradients.length)];
-
   const handleCopyAddress = (e: React.MouseEvent) => {
     e.stopPropagation();
     navigator.clipboard.writeText(festival.nftContract);

@@ -45,6 +45,9 @@ export function Navigation() {
           <Link to="/create-festival" className="nav-link">
             Tạo sự kiện
           </Link>
+          <Link to="/secondary-market" className="nav-link">
+            Chuyển nhượng
+          </Link>
           <Link to="/my-tickets" className="nav-link">
             Vé của tôi
           </Link>

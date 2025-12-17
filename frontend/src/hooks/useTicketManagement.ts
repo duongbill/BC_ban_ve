@@ -1,5 +1,5 @@
 import {useMutation, useQuery, useQueryClient} from "@tanstack/react-query";
-import {useWriteContract, usePublicClient, useAccount} from "wagmi";
+import {useWriteContract, usePublicClient} from "wagmi";
 import {parseEther} from "viem";
 import toast from "react-hot-toast";
 
@@ -99,6 +99,33 @@ const NFT_ABI = [
         inputs: [{name: "tokenId", type: "uint256"}],
         outputs: [{name: "", type: "address"}],
     },
+    {
+        name: "approve",
+        type: "function",
+        stateMutability: "nonpayable",
+        inputs: [
+            {name: "to", type: "address"},
+            {name: "tokenId", type: "uint256"},
+        ],
+        outputs: [],
+    },
+    {
+        name: "getApproved",
+        type: "function",
+        stateMutability: "view",
+        inputs: [{name: "tokenId", type: "uint256"}],
+        outputs: [{name: "", type: "address"}],
+    },
+    {
+        name: "isApprovedForAll",
+        type: "function",
+        stateMutability: "view",
+        inputs: [
+            {name: "owner", type: "address"},
+            {name: "operator", type: "address"},
+        ],
+        outputs: [{name: "", type: "bool"}],
+    },
 ] as const;
 
 /**
@@ -110,7 +137,17 @@ export function useListTicketForSale() {
     const queryClient = useQueryClient();
 
     return useMutation({
-        mutationFn: async ({nftAddress, tokenId, sellingPrice}: {nftAddress: string; tokenId: number; sellingPrice: string}) => {
+        mutationFn: async ({
+            nftAddress,
+            tokenId,
+            sellingPrice,
+            marketplaceAddress,
+        }: {
+            nftAddress: string;
+            tokenId: number;
+            sellingPrice: string;
+            marketplaceAddress?: string;
+        }) => {
             const priceInWei = parseEther(sellingPrice);
 
             const hash = await writeContractAsync({
@@ -125,6 +162,26 @@ export function useListTicketForSale() {
                 if (receipt.status !== "success") {
                     throw new Error("Transaction failed");
                 }
+            }
+
+            // IMPORTANT: Marketplace performs `safeTransferFrom(seller, buyer, tokenId)` on resale.
+            // Seller must approve the marketplace to transfer this token.
+            if (marketplaceAddress && marketplaceAddress !== "0x0000000000000000000000000000000000000000") {
+                const approveHash = await writeContractAsync({
+                    address: nftAddress as `0x${string}`,
+                    abi: NFT_ABI,
+                    functionName: "approve",
+                    args: [marketplaceAddress as `0x${string}`, BigInt(tokenId)],
+                });
+
+                if (publicClient) {
+                    const approveReceipt = await publicClient.waitForTransactionReceipt({hash: approveHash});
+                    if (approveReceipt.status !== "success") {
+                        throw new Error("Approve marketplace failed");
+                    }
+                }
+
+                return {hash, approveHash};
             }
 
             return {hash};
