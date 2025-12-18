@@ -340,6 +340,7 @@ export function useBuySecondaryTicket() {
             const amount = parseEther(price);
 
             // 1) Approve FEST cho marketplace
+            toast.loading("Đang approve FEST tokens...");
             const approveHash = await writeContractAsync({
                 address: tokenAddress as `0x${string}`,
                 abi: FEST_TOKEN_ABI,
@@ -350,9 +351,13 @@ export function useBuySecondaryTicket() {
             if (publicClient) {
                 const approveReceipt = await publicClient.waitForTransactionReceipt({hash: approveHash});
                 if (approveReceipt.status !== "success") {
+                    toast.dismiss();
                     throw new Error("Approve FEST failed");
                 }
             }
+
+            toast.dismiss();
+            toast.loading("Đang mua vé...");
 
             // 2) Gọi buyFromCustomer
             const buyHash = await writeContractAsync({
@@ -364,6 +369,7 @@ export function useBuySecondaryTicket() {
 
             if (publicClient) {
                 const buyReceipt = await publicClient.waitForTransactionReceipt({hash: buyHash});
+                toast.dismiss();
                 if (buyReceipt.status !== "success") {
                     throw new Error("Buy transaction failed");
                 }
@@ -372,11 +378,13 @@ export function useBuySecondaryTicket() {
             return {approveHash, buyHash};
         },
         onSuccess: () => {
+            toast.dismiss();
             queryClient.invalidateQueries({queryKey: ["tickets"]});
             queryClient.invalidateQueries({queryKey: ["myTickets"]});
-            toast.success("Secondary ticket purchased successfully!");
+            toast.success("🎉 Mua vé thành công!");
         },
         onError: (error) => {
+            toast.dismiss();
             console.error("Error buying secondary ticket:", error);
             const rawMessage = (error as any)?.shortMessage || (error as any)?.message || "";
             const hint =
@@ -385,7 +393,7 @@ export function useBuySecondaryTicket() {
                     : "";
             const message =
                 rawMessage ||
-                "Failed to purchase secondary ticket. Kiểm tra lại số dư FEST và bạn không mua vé của chính mình.";
+                "Không thể mua vé. Kiểm tra lại số dư FEST và bạn không mua vé của chính mình.";
             toast.error(message + hint);
         },
     });
@@ -397,20 +405,32 @@ export function useListTicketForSale() {
     const queryClient = useQueryClient();
 
     return useMutation({
-        mutationFn: async ({nftAddress, tokenId, sellingPrice}: {nftAddress: string; tokenId: number; sellingPrice: string}) => {
+        mutationFn: async ({nftAddress, tokenId, sellingPrice, marketplaceAddress}: {nftAddress: string; tokenId: number; sellingPrice: string; marketplaceAddress: string}) => {
             if (!smartAccount) {
                 throw new Error("Smart account not initialized");
             }
 
-            // Create transaction data
+            // Step 1: Approve marketplace to transfer NFT
+            const approveData = encodeFunctionData({
+                abi: NFT_ABI,
+                functionName: "approve",
+                args: [marketplaceAddress as `0x${string}`, BigInt(tokenId)],
+            });
+
+            // Step 2: Set ticket for sale
             const sellData = encodeFunctionData({
                 abi: NFT_ABI,
                 functionName: "setTicketForSale",
                 args: [BigInt(tokenId), parseEther(sellingPrice)],
             });
 
-            // Create user operation
+            // Create user operation with BOTH transactions
             const userOp = await smartAccount.buildUserOp([
+                {
+                    to: nftAddress,
+                    data: approveData,
+                    value: "0",
+                },
                 {
                     to: nftAddress,
                     data: sellData,

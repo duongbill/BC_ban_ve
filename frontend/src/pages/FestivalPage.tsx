@@ -1159,10 +1159,7 @@ export function FestivalPage() {
       return;
     }
 
-    if (allowance < price) {
-      alert("❌ Bạn chưa approve đủ FEST");
-      return;
-    }
+    // Note: Không cần check allowance vì hook useBuySecondaryTicket sẽ tự động approve
 
     if (!forSale) {
       alert("❌ Vé không còn bán");

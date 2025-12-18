@@ -1,5 +1,7 @@
 import { ConnectButton } from "@rainbow-me/rainbowkit";
 import { useEventSignature } from "@/hooks/useEventSignature";
+import { useReadContract } from "wagmi";
+import deployedAddresses from "../../../deployedAddresses.json";
 import "../styles/portal.css";
 
 interface ConnectWalletCardProps {
@@ -12,6 +14,17 @@ interface ConnectWalletCardProps {
   };
   onEventConnected?: () => void;
 }
+
+// FEST Token ABI for balance check
+const FEST_TOKEN_ABI = [
+  {
+    name: "balanceOf",
+    type: "function",
+    stateMutability: "view",
+    inputs: [{ name: "account", type: "address" }],
+    outputs: [{ name: "", type: "uint256" }],
+  },
+] as const;
 
 export function ConnectWalletCard({
   eventData,
@@ -107,6 +120,18 @@ export function ConnectWalletCard({
                 );
               }
 
+              // Fetch FEST token balance
+              const { data: festBalance } = useReadContract({
+                address: deployedAddresses.festToken as `0x${string}`,
+                abi: FEST_TOKEN_ABI,
+                functionName: "balanceOf",
+                args: [account.address as `0x${string}`],
+              });
+
+              const festBalanceFormatted = festBalance
+                ? (Number(festBalance) / 1e18).toFixed(2)
+                : "0";
+
               return (
                 <div
                   className="portal-card gradient-blue"
@@ -116,10 +141,44 @@ export function ConnectWalletCard({
                     <h3 className="portal-card-title">ĐÃ KẾT NỐI VÍ</h3>
                     <p
                       className="portal-card-desc"
-                      style={{ marginBottom: "1rem" }}
+                      style={{ marginBottom: "0.5rem" }}
                     >
                       {account.displayName}
                     </p>
+
+                    {/* FEST Balance Display */}
+                    <div
+                      style={{
+                        padding: "0.75rem",
+                        background: "rgba(0,0,0,0.3)",
+                        borderRadius: "8px",
+                        marginBottom: "1rem",
+                        border: "1px solid rgba(255,255,255,0.2)",
+                      }}
+                    >
+                      <div
+                        style={{
+                          fontSize: "0.7rem",
+                          color: "rgba(255,255,255,0.7)",
+                          marginBottom: "0.25rem",
+                        }}
+                      >
+                        Số dư FEST
+                      </div>
+                      <div
+                        style={{
+                          fontSize: "1.5rem",
+                          fontWeight: "700",
+                          color: "white",
+                        }}
+                      >
+                        {festBalanceFormatted}{" "}
+                        <span style={{ fontSize: "0.9rem", opacity: 0.8 }}>
+                          FEST
+                        </span>
+                      </div>
+                    </div>
+
                     <div
                       style={{
                         display: "flex",
