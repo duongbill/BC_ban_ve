@@ -1,9 +1,9 @@
 import { Link } from "react-router-dom";
 import { ConnectButton } from "@rainbow-me/rainbowkit";
-import { useState } from "react";
+import { useSearch } from "@/contexts/SearchContext";
 
 export function Navigation() {
-  const [searchQuery, setSearchQuery] = useState("");
+  const { searchQuery, setSearchQuery } = useSearch();
 
   return (
     <header className="modern-header">
@@ -42,9 +42,9 @@ export function Navigation() {
 
         {/* Navigation Links */}
         <nav className="header-nav">
-          <Link to="/create-festival" className="nav-link">
+          {/* <Link to="/create-festival" className="nav-link">
             Tạo sự kiện
-          </Link>
+          </Link> */}
           <Link to="/secondary-market" className="nav-link">
             Chuyển nhượng
           </Link>

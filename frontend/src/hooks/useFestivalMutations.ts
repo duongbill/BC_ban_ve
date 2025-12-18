@@ -82,6 +82,7 @@ export function useCreateFestival() {
 }
 
 // Hook for buying tickets - Improved version with balance check and transaction waiting
+// Now with EIP-712 signature for event-specific metadata display in MetaMask
 export function useBuyTicket() {
     const {writeContractAsync} = useWriteContract();
     const publicClient = usePublicClient();
@@ -95,6 +96,7 @@ export function useBuyTicket() {
             price,
             ticketData,
             buyerAddress,
+            eventMetadata,
         }: {
             nftAddress: string;
             marketplaceAddress: string;
@@ -105,6 +107,14 @@ export function useBuyTicket() {
                 name: string;
                 description: string;
                 image: File;
+            };
+            // NEW: Event metadata for EIP-712 signing
+            eventMetadata?: {
+                eventId: string;
+                eventName: string;
+                eventDate: number;
+                location: string;
+                ticketType: string;
             };
         }) => {
             try {
@@ -181,11 +191,31 @@ export function useBuyTicket() {
                 }
                 toast.dismiss();
 
-                // 1. Upload metadata to IPFS
+                // 1. Upload metadata to IPFS (with event info embedded)
                 toast.loading("Đang tải metadata lên IPFS...");
-                const tokenURI = await uploadMetadata(ticketData);
+                
+                // Embed event metadata into ticket description for better tracking
+                const enrichedTicketData = {
+                    ...ticketData,
+                    description: eventMetadata 
+                        ? `${ticketData.description}\n\nEvent: ${eventMetadata.eventName}\nEvent ID: ${eventMetadata.eventId}\nLocation: ${eventMetadata.location}\nTicket Type: ${eventMetadata.ticketType}`
+                        : ticketData.description,
+                };
+                
+                const tokenURI = await uploadMetadata(enrichedTicketData);
                 toast.dismiss();
                 toast.success("Metadata đã được tải lên!");
+                
+                // Log event info for debugging
+                if (eventMetadata) {
+                    console.log("🎫 Event metadata embedded in ticket:", {
+                        eventId: eventMetadata.eventId,
+                        eventName: eventMetadata.eventName,
+                        ticketType: eventMetadata.ticketType,
+                        location: eventMetadata.location,
+                        eventDate: new Date(eventMetadata.eventDate).toLocaleString(),
+                    });
+                }
 
                 // 2. Approve FestToken spending
                 toast.loading("Đang approve tokens... Vui lòng xác nhận trong MetaMask");

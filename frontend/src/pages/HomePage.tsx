@@ -1,8 +1,10 @@
 import {useQuery} from "@tanstack/react-query";
+import {useMemo} from "react";
 import {Festival} from "@/types";
 import {LoadingState, ErrorState} from "@/components/LoadingStates";
 import {HeroCarousel} from "@/components/HeroCarousel";
 import {FestivalScrollRow} from "@/components/FestivalScrollRow";
+import {useSearch} from "@/contexts/SearchContext";
 import "../styles/modern-theme.css";
 
 // Mock data - in real app this would fetch from blockchain
@@ -110,6 +112,8 @@ const mockFestivals: Festival[] = [
 ];
 
 export function HomePage() {
+    const { searchQuery } = useSearch();
+    
     const {
         data: festivals,
         isLoading,
@@ -122,6 +126,18 @@ export function HomePage() {
             return mockFestivals;
         },
     });
+
+    // Filter festivals based on search query
+    const filteredFestivals = useMemo(() => {
+        if (!festivals) return [];
+        if (!searchQuery.trim()) return festivals;
+        
+        const query = searchQuery.toLowerCase().trim();
+        return festivals.filter((festival) => 
+            festival.name.toLowerCase().includes(query) ||
+            festival.symbol.toLowerCase().includes(query)
+        );
+    }, [festivals, searchQuery]);
 
     if (isLoading) {
         return (
@@ -140,21 +156,72 @@ export function HomePage() {
     }
 
     // Featured festivals for hero carousel (top 4)
-    const featuredFestivals = festivals?.slice(0, 10) || [];
+    const featuredFestivals = filteredFestivals.slice(0, 10);
 
-    // Trending festivals (all festivals for now)
-    const trendingFestivals = festivals || [];
+    // Trending festivals
+    const trendingFestivals = filteredFestivals;
 
     return (
         <div className="modern-container">
-            {/* Hero Carousel */}
-            <HeroCarousel festivals={featuredFestivals} />
+            {/* Search Results Info */}
+            {searchQuery.trim() && (
+                <div style={{
+                    padding: "16px",
+                    background: "rgba(99, 102, 241, 0.1)",
+                    border: "1px solid rgba(99, 102, 241, 0.3)",
+                    borderRadius: "8px",
+                    marginBottom: "24px",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "12px"
+                }}>
+                    <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                    </svg>
+                    <span style={{ color: "#e0e0e0" }}>
+                        Tìm thấy <strong style={{ color: "#6366f1" }}>{filteredFestivals.length}</strong> sự kiện cho "{searchQuery}"
+                    </span>
+                    {filteredFestivals.length === 0 && (
+                        <span style={{ color: "#888", marginLeft: "auto" }}>
+                            Không tìm thấy kết quả phù hợp
+                        </span>
+                    )}
+                </div>
+            )}
 
-            {/* Featured Festivals Section */}
-            <FestivalScrollRow title="Sự kiện âm nhạc nổi bật" festivals={featuredFestivals} />
+            {filteredFestivals.length === 0 && searchQuery.trim() ? (
+                <div style={{
+                    padding: "48px",
+                    textAlign: "center",
+                    color: "#888"
+                }}>
+                    <div style={{ fontSize: "48px", marginBottom: "16px" }}>🔍</div>
+                    <h3 style={{ fontSize: "20px", marginBottom: "8px", color: "#e0e0e0" }}>
+                        Không tìm thấy sự kiện
+                    </h3>
+                    <p>Hãy thử tìm kiếm với từ khóa khác</p>
+                </div>
+            ) : (
+                <>
+                    {/* Hero Carousel - only show when not searching */}
+                    {!searchQuery.trim() && <HeroCarousel festivals={featuredFestivals} />}
 
-            {/* Trending Events Section with Rankings */}
-            <FestivalScrollRow title="Sự kiện đang thịnh hành" festivals={trendingFestivals} showRanking={true} />
+                    {/* Featured Festivals Section */}
+                    <FestivalScrollRow 
+                        title={searchQuery.trim() ? "Kết quả tìm kiếm" : "Sự kiện âm nhạc nổi bật"} 
+                        festivals={featuredFestivals} 
+                    />
+
+                    {/* Trending Events Section with Rankings - only show when not searching */}
+                    {!searchQuery.trim() && (
+                        <FestivalScrollRow 
+                            title="Sự kiện đang thịnh hành" 
+                            festivals={trendingFestivals} 
+                            showRanking={true} 
+                        />
+                    )}
+                </>
+            )}
         </div>
     );
 }

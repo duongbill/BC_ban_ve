@@ -1,5 +1,5 @@
-import React, { useMemo, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import React, { useMemo, useState, useEffect } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAccount, usePublicClient } from "wagmi";
 import { formatUnits, parseAbiItem } from "viem";
 import { useBiconomyAccount } from "@/hooks/useBiconomyAccount";
@@ -9,8 +9,9 @@ import {
   useUnlistTicket,
 } from "@/hooks/useTicketManagement";
 import { Festival, Ticket, TicketMetadata } from "@/types";
-import { ipfsToHttp } from "@/services/ipfs";
+import { ipfsToHttp, fetchMetadata } from "@/services/ipfs";
 import toast from "react-hot-toast";
+import { QRCodeCanvas } from "qrcode.react";
 import "../styles/my-tickets-page.css";
 
 // Import deployed addresses
@@ -118,18 +119,16 @@ export function MyTicketsPage() {
   const [resolvingMetadataId, setResolvingMetadataId] = useState<string | null>(
     null
   );
-  const [metadataModal, setMetadataModal] = useState<{
+  const [qrCodeModal, setQRCodeModal] = useState<{
     isOpen: boolean;
     ticket: Ticket | null;
-    loading: boolean;
-    data: TicketMetadata | null;
-    url: string | null;
+    eventName: string | null;
+    eventId: string | null;
   }>({
     isOpen: false,
     ticket: null,
-    loading: false,
-    data: null,
-    url: null,
+    eventName: null,
+    eventId: null,
   });
 
   const listTicketMutation = useListTicketForSale();
@@ -168,6 +167,9 @@ export function MyTicketsPage() {
       Boolean(publicClient) &&
       marketplaces.length > 0 &&
       sellerAddresses.length > 0,
+    refetchOnMount: "always",
+    refetchOnWindowFocus: true,
+    staleTime: 0,
     queryFn: async (): Promise<SoldTicket[]> => {
       if (
         !publicClient ||
@@ -245,53 +247,133 @@ export function MyTicketsPage() {
     error: ticketsError,
   } = useMyTickets(deployedAddresses.sampleNFT, address);
 
-  // Transform blockchain tickets to UI format
+  const queryClient = useQueryClient();
+
+  // Force refetch all data when component mounts
+  useEffect(() => {
+    // Invalidate all queries to force fresh data
+    queryClient.invalidateQueries({ queryKey: ["soldTickets"] });
+    queryClient.invalidateQueries({ queryKey: ["myTickets"] });
+  }, [queryClient]);
+
+  // State to hold metadata for each ticket
+  const [ticketsWithMetadata, setTicketsWithMetadata] = useState<Ticket[]>([]);
+  const [isLoadingMetadata, setIsLoadingMetadata] = useState(false);
+
+  // Fetch metadata for blockchain tickets
+  useEffect(() => {
+    async function loadMetadata() {
+      if (!blockchainTickets || blockchainTickets.length === 0) {
+        return;
+      }
+
+      setIsLoadingMetadata(true);
+      const ticketsWithMeta = await Promise.all(
+        blockchainTickets.map(async (ticket) => {
+          let eventId = "1";
+          let eventName = "Summer Music Festival";
+          let ticketTypeName = "";
+
+          try {
+            // Fetch metadata from IPFS (localStorage for mock mode)
+            const metadata = await fetchMetadata(ticket.tokenURI);
+            console.log(
+              "📦 Fetched metadata for token",
+              ticket.tokenId,
+              ":",
+              metadata
+            );
+
+            // Parse event info from description
+            // Description format: "...\n\nEvent: Jazz Festival Hà Nội\nEvent ID: 4\nTicket Type: VIP Pass\n..."
+            if (metadata.description) {
+              const eventIdMatch =
+                metadata.description.match(/Event ID: (\d+)/);
+              const eventNameMatch =
+                metadata.description.match(/Event: ([^\n]+)/);
+              const ticketTypeMatch = metadata.description.match(
+                /Ticket Type: ([^\n]+)/
+              );
+
+              if (eventIdMatch && eventIdMatch[1]) {
+                eventId = eventIdMatch[1];
+              }
+              if (eventNameMatch && eventNameMatch[1]) {
+                eventName = eventNameMatch[1].trim();
+              }
+              if (ticketTypeMatch && ticketTypeMatch[1]) {
+                ticketTypeName = ticketTypeMatch[1].trim();
+              }
+            }
+          } catch (e) {
+            console.warn(
+              "Could not fetch metadata for token",
+              ticket.tokenId,
+              ":",
+              e
+            );
+          }
+
+          return {
+            id: ticket.tokenId.toString(),
+            tokenId: ticket.tokenId,
+            tokenURI: ticket.tokenURI,
+            purchasePrice: (
+              BigInt(ticket.purchasePrice) / BigInt(10 ** 18)
+            ).toString(),
+            sellingPrice: ticket.isForSale
+              ? (BigInt(ticket.sellingPrice) / BigInt(10 ** 18)).toString()
+              : undefined,
+            isForSale: ticket.isForSale,
+            owner: ticket.owner,
+            isGifted: ticket.isGifted,
+            isVerified: ticket.isVerified,
+            ticketTypeName,
+            festival: {
+              id: eventId,
+              name: eventName,
+              symbol: eventId === "1" ? "SUMMER" : `EVENT${eventId}`,
+              nftContract: deployedAddresses.sampleNFT,
+              marketplace: deployedAddresses.sampleMarketplace,
+              organiser: deployedAddresses.organiser,
+            },
+          };
+        })
+      );
+
+      setTicketsWithMetadata(ticketsWithMeta);
+      setIsLoadingMetadata(false);
+    }
+
+    loadMetadata();
+  }, [blockchainTickets]);
+
+  // Use tickets with metadata or fallback to mock data
   const tickets = React.useMemo(() => {
     console.log("📋 Blockchain tickets data:", {
       blockchainTickets,
       hasTickets: !!blockchainTickets,
       ticketCount: blockchainTickets?.length || 0,
+      ticketsWithMetadata: ticketsWithMetadata.length,
       userAddress: smartAccountAddress || address,
       nftAddress: deployedAddresses.sampleNFT,
     });
 
-    if (!blockchainTickets || blockchainTickets.length === 0) {
-      console.log("⚠️ No blockchain tickets found, using mock data");
-      // Fallback to mock data if no real tickets
-      return mockTickets.filter(
-        (ticket) =>
-          ticket.owner.toLowerCase() ===
-          (smartAccountAddress || address)?.toLowerCase()
-      );
+    if (blockchainTickets && blockchainTickets.length > 0) {
+      return ticketsWithMetadata;
     }
 
-    return blockchainTickets.map((ticket) => ({
-      id: ticket.tokenId.toString(),
-      tokenId: ticket.tokenId,
-      tokenURI: ticket.tokenURI,
-      purchasePrice: (
-        BigInt(ticket.purchasePrice) / BigInt(10 ** 18)
-      ).toString(),
-      sellingPrice: ticket.isForSale
-        ? (BigInt(ticket.sellingPrice) / BigInt(10 ** 18)).toString()
-        : undefined,
-      isForSale: ticket.isForSale,
-      owner: ticket.owner,
-      isGifted: ticket.isGifted,
-      isVerified: ticket.isVerified,
-      festival: {
-        id: "1",
-        name: "Summer Music Festival",
-        symbol: "SUMMER",
-        nftContract: deployedAddresses.sampleNFT,
-        marketplace: deployedAddresses.sampleMarketplace,
-        organiser: deployedAddresses.organiser,
-      },
-    }));
-  }, [blockchainTickets, smartAccountAddress, address]);
+    console.log("⚠️ No blockchain tickets found, using mock data");
+    // Fallback to mock data if no real tickets
+    return mockTickets.filter(
+      (ticket) =>
+        ticket.owner.toLowerCase() ===
+        (smartAccountAddress || address)?.toLowerCase()
+    );
+  }, [blockchainTickets, ticketsWithMetadata, smartAccountAddress, address]);
 
-  // Use loading and error from blockchain query
-  const isLoading = isLoadingTickets;
+  // Use loading and error from blockchain query (including metadata loading)
+  const isLoading = isLoadingTickets || isLoadingMetadata;
   const error = ticketsError;
 
   const handleSellTicket = async () => {
@@ -351,22 +433,40 @@ export function MyTicketsPage() {
     }
   };
 
-  const handleViewMetadata = (ticket: Ticket) => {
-    // Demo mode: không fetch metadata thật, chỉ hiển thị link/IPFS URI
+  const handleShowQRCode = async (ticket: Ticket) => {
     setResolvingMetadataId(ticket.id);
 
-    const url = ipfsToHttp(ticket.tokenURI);
+    try {
+      // Fetch metadata để lấy event name và event ID
+      const metadata = await fetchMetadata(ticket.tokenURI);
 
-    setMetadataModal({
-      isOpen: true,
-      ticket,
-      loading: false,
-      data: null,
-      url,
-    });
+      // Parse event info from metadata description
+      const eventIdMatch = metadata?.description?.match(/Event ID: (\d+)/);
+      const eventNameMatch = metadata?.description?.match(/Event: ([^\n]+)/);
 
-    // Ngay lập tức bỏ trạng thái loading trên nút
-    setResolvingMetadataId(null);
+      const eventId = eventIdMatch ? eventIdMatch[1] : ticket.festival.id;
+      const eventName = eventNameMatch
+        ? eventNameMatch[1].trim()
+        : ticket.festival.name;
+
+      setQRCodeModal({
+        isOpen: true,
+        ticket,
+        eventName,
+        eventId,
+      });
+    } catch (error) {
+      console.error("Error loading ticket metadata:", error);
+      // Fallback to festival data if metadata fetch fails
+      setQRCodeModal({
+        isOpen: true,
+        ticket,
+        eventName: ticket.festival.name,
+        eventId: ticket.festival.id,
+      });
+    } finally {
+      setResolvingMetadataId(null);
+    }
   };
 
   if (!smartAccountAddress && !address) {
@@ -471,13 +571,13 @@ export function MyTicketsPage() {
           <div className="user-info">
             <h3 className="user-name">Tài khoản của bạn</h3>
             <div className="user-address">
-              <span className="address-mono">
+              {/* <span className="address-mono">
                 {smartAccountAddress || address
                   ? `${(smartAccountAddress || address)?.slice(0, 6)}...${(
                       smartAccountAddress || address
                     )?.slice(-4)}`
                   : "Not connected"}
-              </span>
+              </span> */}
               <button
                 onClick={copyAddress}
                 className="copy-icon"
@@ -508,7 +608,7 @@ export function MyTicketsPage() {
         </div>
 
         <nav className="sidebar-nav">
-          <h4 className="nav-section-title">Thông tin tài khoản</h4>
+          {/* <h4 className="nav-section-title">Thông tin tài khoản</h4>
           <a href="#" className="nav-item">
             <svg
               className="nav-icon"
@@ -524,7 +624,7 @@ export function MyTicketsPage() {
               />
             </svg>
             Thông tin tài khoản
-          </a>
+          </a> */}
           <a href="#" className="nav-item active">
             <svg
               className="nav-icon"
@@ -541,7 +641,7 @@ export function MyTicketsPage() {
             </svg>
             Vé của tôi
           </a>
-          <a href="#" className="nav-item">
+          {/* <a href="#" className="nav-item">
             <svg
               className="nav-icon"
               fill="none"
@@ -578,7 +678,7 @@ export function MyTicketsPage() {
               />
             </svg>
             Cài đặt
-          </a>
+          </a> */}
         </nav>
 
         <div className="sidebar-stats">
@@ -705,7 +805,7 @@ export function MyTicketsPage() {
                   key={ticket.id}
                   ticket={ticket}
                   onSell={() => setSellModalData({ ticket, price: "" })}
-                  onViewMetadata={handleViewMetadata}
+                  onShowQRCode={handleShowQRCode}
                   onUnlist={handleUnlistTicket}
                   resolvingMetadataId={resolvingMetadataId}
                 />
@@ -775,19 +875,18 @@ export function MyTicketsPage() {
           />
         )}
 
-        {metadataModal.isOpen && metadataModal.ticket && (
-          <MetadataPreviewModal
-            ticket={metadataModal.ticket}
-            metadata={metadataModal.data}
-            url={metadataModal.url}
-            loading={metadataModal.loading}
+        {qrCodeModal.isOpen && qrCodeModal.ticket && (
+          <TicketQRCodeModal
+            ticket={qrCodeModal.ticket}
+            eventName={qrCodeModal.eventName}
+            eventId={qrCodeModal.eventId}
+            ownerAddress={address || smartAccountAddress || ""}
             onClose={() =>
-              setMetadataModal({
+              setQRCodeModal({
                 isOpen: false,
                 ticket: null,
-                loading: false,
-                data: null,
-                url: null,
+                eventName: null,
+                eventId: null,
               })
             }
           />
@@ -873,7 +972,7 @@ function SoldTicketCard({ sold }: { sold: SoldTicket }) {
 interface TicketCardProps {
   ticket: Ticket;
   onSell: () => void;
-  onViewMetadata: (ticket: Ticket) => void;
+  onShowQRCode: (ticket: Ticket) => void;
   onUnlist: (ticket: Ticket) => void;
   resolvingMetadataId: string | null;
 }
@@ -881,7 +980,7 @@ interface TicketCardProps {
 function TicketCard({
   ticket,
   onSell,
-  onViewMetadata,
+  onShowQRCode,
   onUnlist,
   resolvingMetadataId,
 }: TicketCardProps) {
@@ -909,7 +1008,7 @@ function TicketCard({
           <div className="poster-icon">🎵</div>
           <h3 className="poster-title">{ticket.festival.name}</h3>
           <div className="token-badge">
-            <span className="token-label">Token</span>
+            <span className="token-label">Mã vé</span>
             <span className="token-id">#{ticket.tokenId}</span>
           </div>
         </div>
@@ -932,6 +1031,33 @@ function TicketCard({
           <h4 className="festival-name">{ticket.festival.name}</h4>
           <span className="festival-symbol">{ticket.festival.symbol}</span>
         </div>
+
+        {/* Ticket Type Badge */}
+        {(ticket as any).ticketTypeName && (
+          <div
+            style={{
+              padding: "8px 12px",
+              background: "rgba(99, 102, 241, 0.1)",
+              border: "1px solid rgba(99, 102, 241, 0.3)",
+              borderRadius: "6px",
+              marginBottom: "12px",
+              display: "flex",
+              alignItems: "center",
+              gap: "6px",
+            }}
+          >
+            <span style={{ fontSize: "16px" }}>🎫</span>
+            <span
+              style={{
+                fontSize: "14px",
+                fontWeight: "500",
+                color: "#a5b4fc",
+              }}
+            >
+              {(ticket as any).ticketTypeName}
+            </span>
+          </div>
+        )}
 
         {/* Pricing Info */}
         <div className="pricing-card">
@@ -997,35 +1123,54 @@ function TicketCard({
             </div>
           )}
 
-          <button
-            onClick={() => onViewMetadata(ticket)}
-            className="btn-view-metadata"
-            disabled={resolvingMetadataId === ticket.id}
-          >
-            {resolvingMetadataId === ticket.id ? (
-              <>
-                <div className="loading-dot"></div>
-                Đang mở...
-              </>
-            ) : (
-              <>
-                <svg
-                  className="w-4 h-4"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"
-                  />
-                </svg>
-                Xem chi tiết
-              </>
-            )}
-          </button>
+          {!ticket.isForSale && (
+            <button
+              onClick={() => onShowQRCode(ticket)}
+              className="btn-view-metadata"
+              disabled={resolvingMetadataId === ticket.id}
+            >
+              {resolvingMetadataId === ticket.id ? (
+                <>
+                  <div className="loading-dot"></div>
+                  Đang mở...
+                </>
+              ) : (
+                <>
+                  <svg
+                    className="w-4 h-4"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z"
+                    />
+                  </svg>
+                  Hiển thị QR Code
+                </>
+              )}
+            </button>
+          )}
+
+          {ticket.isForSale && (
+            <div
+              style={{
+                padding: "0.75rem 1rem",
+                background: "rgba(239, 68, 68, 0.1)",
+                border: "1px solid rgba(239, 68, 68, 0.3)",
+                borderRadius: "0.5rem",
+                fontSize: "0.875rem",
+                color: "#ef4444",
+                textAlign: "center",
+                fontWeight: "500",
+              }}
+            >
+              🔒 Vé đang rao bán - Không thể check-in
+            </div>
+          )}
         </div>
       </div>
     </div>
@@ -1185,93 +1330,606 @@ function SellTicketModal({
   );
 }
 
-interface MetadataPreviewModalProps {
+interface TicketQRCodeModalProps {
   ticket: Ticket;
-  metadata: TicketMetadata | null;
-  url: string | null;
-  loading: boolean;
+  eventName: string | null;
+  eventId: string | null;
+  ownerAddress: string;
   onClose: () => void;
 }
 
-function MetadataPreviewModal({
+function TicketQRCodeModal({
   ticket,
-  metadata,
-  url,
-  loading,
+  eventName,
+  eventId,
+  ownerAddress,
   onClose,
-}: MetadataPreviewModalProps) {
+}: TicketQRCodeModalProps) {
+  // State cho dynamic QR Code
+  const [timeLeft, setTimeLeft] = useState(30);
+  const [qrValue, setQrValue] = useState("");
+
+  // Hàm tạo QR Code mới với expiresAt
+  const generateNewQR = () => {
+    const now = Date.now();
+    const expiresAt = now + 30000; // 30 giây
+
+    const data = {
+      type: "TICKET_AUTH",
+      eventId: eventId || ticket.festival.id,
+      eventName: eventName || ticket.festival.name,
+      tokenId: ticket.tokenId.toString(),
+      nftContract: ticket.festival.nftContract,
+      owner: ownerAddress.toLowerCase(),
+      expiresAt: expiresAt,
+      seed: Math.random(), // Đảm bảo QR thay đổi hình dạng
+    };
+
+    setQrValue(JSON.stringify(data));
+    setTimeLeft(30);
+  };
+
+  // Effect để tự động làm mới QR mỗi 30 giây
+  useEffect(() => {
+    // Tạo QR lần đầu
+    generateNewQR();
+
+    // Countdown timer mỗi giây
+    const timer = setInterval(() => {
+      setTimeLeft((prev) => {
+        if (prev <= 1) {
+          generateNewQR(); // Hết 30s thì tạo mã mới
+          return 30;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+
+    return () => clearInterval(timer);
+  }, [
+    eventId,
+    eventName,
+    ticket.tokenId,
+    ticket.festival.nftContract,
+    ownerAddress,
+  ]);
+
   return (
-    <div className="metadata-modal-overlay">
-      <div className="metadata-modal">
-        <div className="metadata-modal-header">
-          <div>
-            <h3>Metadata vé #{ticket.tokenId}</h3>
-            <p>{ticket.festival.name}</p>
-          </div>
-          <button className="metadata-close-btn" onClick={onClose}>
+    <div
+      className="metadata-modal-overlay"
+      style={{
+        backdropFilter: "blur(10px)",
+        background: "rgba(0, 0, 0, 0.75)",
+      }}
+    >
+      <div
+        className="metadata-modal"
+        style={{
+          maxWidth: "600px",
+          maxHeight: "85vh",
+          background: "linear-gradient(135deg, #1e293b 0%, #0f172a 100%)",
+          border: "1px solid rgba(255, 255, 255, 0.1)",
+          boxShadow: "0 25px 50px -12px rgba(0, 0, 0, 0.5)",
+          display: "flex",
+          flexDirection: "column",
+          overflow: "hidden",
+          marginTop: "5rem",
+        }}
+      >
+        {/* Header */}
+        <div
+          style={{
+            background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
+            padding: "1.5rem 2rem",
+            position: "relative",
+            overflow: "hidden",
+            flexShrink: 0,
+          }}
+        >
+          {/* Animated background pattern */}
+          <div
+            style={{
+              position: "absolute",
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              backgroundImage:
+                "radial-gradient(circle at 20% 50%, rgba(255, 255, 255, 0.1) 0%, transparent 50%), radial-gradient(circle at 80% 80%, rgba(255, 255, 255, 0.1) 0%, transparent 50%)",
+              animation: "float 6s ease-in-out infinite",
+            }}
+          ></div>
+
+          {/* Close button */}
+          <button
+            onClick={onClose}
+            style={{
+              position: "absolute",
+              top: "1rem",
+              right: "1rem",
+              background: "rgba(255, 255, 255, 0.15)",
+              backdropFilter: "blur(10px)",
+              border: "1px solid rgba(255, 255, 255, 0.2)",
+              color: "white",
+              width: "36px",
+              height: "36px",
+              borderRadius: "50%",
+              cursor: "pointer",
+              fontSize: "1.25rem",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              transition: "all 0.2s ease",
+              zIndex: 10,
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.background = "rgba(255, 255, 255, 0.25)";
+              e.currentTarget.style.transform = "scale(1.1) rotate(90deg)";
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.background = "rgba(255, 255, 255, 0.15)";
+              e.currentTarget.style.transform = "scale(1) rotate(0deg)";
+            }}
+          >
             ✕
           </button>
-        </div>
 
-        {loading ? (
-          <div className="metadata-modal-loading">
-            <div className="loading-spinner"></div>
-            <p>Đang tải metadata từ IPFS...</p>
-          </div>
-        ) : metadata ? (
-          <div className="metadata-modal-body">
-            {metadata.image && (
-              <div className="metadata-image-wrapper">
-                <img
-                  src={
-                    metadata.image.startsWith("ipfs://")
-                      ? metadata.image.replace(
-                          "ipfs://",
-                          "https://ipfs.io/ipfs/"
-                        )
-                      : metadata.image
-                  }
-                  alt={metadata.name || `Ticket #${ticket.tokenId}`}
-                />
-              </div>
-            )}
-            <div className="metadata-details">
-              <h4>{metadata.name || `Ticket #${ticket.tokenId}`}</h4>
-              {metadata.description && (
-                <p className="metadata-description">{metadata.description}</p>
-              )}
-
-              {Array.isArray(metadata.attributes) &&
-                metadata.attributes.length > 0 && (
-                  <div className="metadata-attributes">
-                    {metadata.attributes.map((attr, idx) => (
-                      <div key={idx} className="metadata-attribute">
-                        <span className="attr-trait">{attr.trait_type}</span>
-                        <span className="attr-value">{String(attr.value)}</span>
-                      </div>
-                    ))}
-                  </div>
-                )}
+          {/* Header content */}
+          <div
+            style={{
+              position: "relative",
+              zIndex: 1,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: "1rem",
+              color: "white",
+            }}
+          >
+            <div
+              style={{
+                width: "60px",
+                height: "60px",
+                background: "rgba(255, 255, 255, 0.2)",
+                backdropFilter: "blur(10px)",
+                borderRadius: "1rem",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                fontSize: "2rem",
+                border: "2px solid rgba(255, 255, 255, 0.3)",
+                boxShadow: "0 8px 32px rgba(0, 0, 0, 0.1)",
+              }}
+            >
+              🎫
+            </div>
+            <div style={{ textAlign: "left", flex: 1 }}>
+              <h3
+                style={{
+                  fontSize: "1.5rem",
+                  fontWeight: "700",
+                  margin: 0,
+                  marginBottom: "0.25rem",
+                  textShadow: "0 2px 10px rgba(0, 0, 0, 0.2)",
+                }}
+              >
+                Vé #{ticket.tokenId}
+              </h3>
+              <p
+                style={{
+                  fontSize: "0.95rem",
+                  margin: 0,
+                  opacity: 0.95,
+                  fontWeight: "500",
+                }}
+              >
+                {eventName || ticket.festival.name}
+              </p>
             </div>
           </div>
-        ) : (
-          <div className="metadata-modal-loading">
-            <p>Không đọc được metadata cho vé này.</p>
-          </div>
-        )}
+        </div>
 
-        <div className="metadata-modal-footer">
-          {url && (
-            <button
-              className="btn-open-ipfs"
-              onClick={() => window.open(url, "_blank")}
+        {/* Body */}
+        <div
+          style={{
+            padding: "2rem",
+            overflowY: "auto",
+            flex: 1,
+          }}
+        >
+          {/* QR Code + Info Flex Layout */}
+          <div
+            style={{
+              display: "flex",
+              flexDirection: "column",
+              gap: "2rem",
+              alignItems: "center",
+            }}
+          >
+            {/* QR Code Section */}
+            <div
+              style={{
+                background: "white",
+                padding: "1.5rem",
+                borderRadius: "1.5rem",
+                boxShadow:
+                  "0 20px 25px -5px rgba(0, 0, 0, 0.3), 0 10px 10px -5px rgba(0, 0, 0, 0.2)",
+                position: "relative",
+                display: "flex",
+                justifyContent: "center",
+                alignItems: "center",
+              }}
             >
-              Mở trên IPFS
-            </button>
-          )}
-          <button className="btn-close-modal" onClick={onClose}>
-            Đóng
-          </button>
+              <div
+                style={{
+                  position: "absolute",
+                  top: "-10px",
+                  left: "-10px",
+                  right: "-10px",
+                  bottom: "-10px",
+                  background:
+                    timeLeft <= 10
+                      ? "linear-gradient(135deg, #ef4444, #dc2626, #b91c1c)"
+                      : "linear-gradient(135deg, #8b5cf6, #6366f1, #ec4899)",
+                  borderRadius: "1.5rem",
+                  zIndex: -1,
+                  opacity: 0.5,
+                  filter: "blur(20px)",
+                  transition: "all 0.5s ease",
+                }}
+              ></div>
+              <QRCodeCanvas
+                id="ticket-qr-code"
+                value={qrValue}
+                size={280}
+                level="H"
+                includeMargin={true}
+              />
+
+              {/* Warning overlay khi gần hết hạn */}
+              {timeLeft <= 5 && (
+                <div
+                  style={{
+                    position: "absolute",
+                    inset: 0,
+                    background: "rgba(255, 255, 255, 0.85)",
+                    backdropFilter: "blur(4px)",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    borderRadius: "1rem",
+                    animation: "pulse 1s ease-in-out infinite",
+                  }}
+                >
+                  <div style={{ textAlign: "center" }}>
+                    <div style={{ fontSize: "2rem", marginBottom: "0.5rem" }}>
+                      🔄
+                    </div>
+                    <span
+                      style={{
+                        color: "#dc2626",
+                        fontWeight: "bold",
+                        fontSize: "1.1rem",
+                      }}
+                    >
+                      Đang làm mới...
+                    </span>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Countdown Timer & Progress Bar */}
+            <div
+              style={{
+                width: "100%",
+                maxWidth: "500px",
+                background: "rgba(255, 255, 255, 0.05)",
+                border: "1px solid rgba(255, 255, 255, 0.1)",
+                borderRadius: "1rem",
+                padding: "1.25rem",
+                backdropFilter: "blur(10px)",
+              }}
+            >
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  marginBottom: "0.75rem",
+                }}
+              >
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "0.5rem",
+                  }}
+                >
+                  <span style={{ fontSize: "1.5rem" }}>⏱️</span>
+                  <span
+                    style={{
+                      color: "#e2e8f0",
+                      fontSize: "0.9rem",
+                      fontWeight: "500",
+                    }}
+                  >
+                    Mã tự động làm mới
+                  </span>
+                </div>
+                <span
+                  style={{
+                    color: timeLeft <= 10 ? "#ef4444" : "#10b981",
+                    fontSize: "1.25rem",
+                    fontWeight: "bold",
+                    fontFamily: "monospace",
+                  }}
+                >
+                  {timeLeft}s
+                </span>
+              </div>
+
+              {/* Progress Bar */}
+              <div
+                style={{
+                  width: "100%",
+                  height: "8px",
+                  background: "rgba(255, 255, 255, 0.1)",
+                  borderRadius: "9999px",
+                  overflow: "hidden",
+                }}
+              >
+                <div
+                  style={{
+                    height: "100%",
+                    width: `${(timeLeft / 30) * 100}%`,
+                    background:
+                      timeLeft <= 10
+                        ? "linear-gradient(90deg, #ef4444 0%, #dc2626 100%)"
+                        : "linear-gradient(90deg, #10b981 0%, #059669 100%)",
+                    transition: "width 1s linear, background 0.3s ease",
+                    borderRadius: "9999px",
+                    boxShadow:
+                      timeLeft <= 10
+                        ? "0 0 10px rgba(239, 68, 68, 0.5)"
+                        : "0 0 10px rgba(16, 185, 129, 0.5)",
+                  }}
+                ></div>
+              </div>
+
+              <p
+                style={{
+                  marginTop: "0.75rem",
+                  fontSize: "0.8rem",
+                  color: "#94a3b8",
+                  textAlign: "center",
+                }}
+              >
+                {timeLeft <= 10
+                  ? "⚠️ QR Code sắp hết hạn và sẽ tự động làm mới"
+                  : "✅ QR Code đang hoạt động"}
+              </p>
+            </div>
+
+            {/* Status Badge */}
+            <div
+              style={{
+                background: "linear-gradient(135deg, #10b981 0%, #059669 100%)",
+                padding: "1.25rem 2rem",
+                borderRadius: "1rem",
+                boxShadow: "0 10px 15px -3px rgba(16, 185, 129, 0.3)",
+                display: "flex",
+                alignItems: "center",
+                gap: "1rem",
+                width: "100%",
+                maxWidth: "500px",
+              }}
+            >
+              <div
+                style={{
+                  width: "56px",
+                  height: "56px",
+                  background: "rgba(255, 255, 255, 0.2)",
+                  borderRadius: "50%",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  fontSize: "1.75rem",
+                  flexShrink: 0,
+                }}
+              >
+                ✅
+              </div>
+              <div style={{ flex: 1 }}>
+                <div
+                  style={{
+                    color: "white",
+                    fontSize: "1.5rem",
+                    fontWeight: "bold",
+                  }}
+                >
+                  Vé Hợp Lệ
+                </div>
+                <div
+                  style={{
+                    color: "rgba(255, 255, 255, 0.9)",
+                    fontSize: "0.95rem",
+                  }}
+                >
+                  Sẵn sàng check-in tại cổng
+                </div>
+              </div>
+            </div>
+
+            {/* Details Card */}
+            <div
+              style={{
+                background: "rgba(255, 255, 255, 0.05)",
+                border: "1px solid rgba(255, 255, 255, 0.1)",
+                borderRadius: "1rem",
+                padding: "1.5rem",
+                backdropFilter: "blur(10px)",
+                width: "100%",
+                maxWidth: "500px",
+              }}
+            >
+              <div
+                style={{
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: "1rem",
+                }}
+              >
+                <InfoRow
+                  icon="🎭"
+                  label="Sự kiện"
+                  value={eventName || ticket.festival.name}
+                />
+                <InfoRow
+                  icon="🎟️"
+                  label="Token ID"
+                  value={`#${ticket.tokenId}`}
+                />
+                <InfoRow
+                  icon="👤"
+                  label="Chủ sở hữu"
+                  value={shortenAddress(ownerAddress)}
+                />
+                <InfoRow
+                  icon="📜"
+                  label="NFT Contract"
+                  value={shortenAddress(ticket.festival.nftContract)}
+                />
+              </div>
+            </div>
+
+            {/* Instructions */}
+            <div
+              style={{
+                background:
+                  "linear-gradient(135deg, rgba(59, 130, 246, 0.1) 0%, rgba(147, 51, 234, 0.1) 100%)",
+                border: "1px solid rgba(59, 130, 246, 0.3)",
+                borderRadius: "1rem",
+                padding: "1.25rem",
+                width: "100%",
+                maxWidth: "500px",
+              }}
+            >
+              <div
+                style={{
+                  color: "#60a5fa",
+                  fontSize: "0.95rem",
+                  fontWeight: "600",
+                  marginBottom: "0.75rem",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "0.5rem",
+                }}
+              >
+                <span style={{ fontSize: "1.25rem" }}>📱</span>
+                Hướng dẫn sử dụng
+              </div>
+              <ol
+                style={{
+                  color: "#cbd5e1",
+                  fontSize: "0.9rem",
+                  margin: 0,
+                  paddingLeft: "1.5rem",
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: "0.5rem",
+                }}
+              >
+                <li>Mở màn hình này tại cổng check-in</li>
+                <li>Nhân viên quét mã QR</li>
+                <li>Hệ thống tự động xác thực trên blockchain</li>
+              </ol>
+            </div>
+          </div>
+        </div>
+
+        {/* Footer - Security Notice */}
+        <div
+          style={{
+            padding: "1.25rem 2rem",
+            borderTop: "1px solid rgba(255, 255, 255, 0.1)",
+            flexShrink: 0,
+            background: "rgba(15, 23, 42, 0.8)",
+            backdropFilter: "blur(10px)",
+          }}
+        >
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: "0.75rem",
+              padding: "1rem",
+              background: "rgba(16, 185, 129, 0.1)",
+              border: "1px solid rgba(16, 185, 129, 0.3)",
+              borderRadius: "0.75rem",
+            }}
+          >
+            <span style={{ fontSize: "1.5rem" }}>🔒</span>
+            <div style={{ flex: 1 }}>
+              <div
+                style={{
+                  color: "#10b981",
+                  fontSize: "0.85rem",
+                  fontWeight: "600",
+                  marginBottom: "0.25rem",
+                }}
+              >
+                QR Code bảo mật cao
+              </div>
+              <div style={{ color: "#94a3b8", fontSize: "0.75rem" }}>
+                Mã được mã hóa và tự động làm mới mỗi 30 giây để tăng cường bảo
+                mật
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Helper component for info rows
+function InfoRow({
+  icon,
+  label,
+  value,
+}: {
+  icon: string;
+  label: string;
+  value: string;
+}) {
+  return (
+    <div
+      style={{
+        display: "flex",
+        alignItems: "center",
+        gap: "0.75rem",
+        padding: "0.75rem",
+        background: "rgba(255, 255, 255, 0.03)",
+        borderRadius: "0.5rem",
+        transition: "all 0.3s ease",
+      }}
+    >
+      <span style={{ fontSize: "1.5rem" }}>{icon}</span>
+      <div style={{ flex: 1 }}>
+        <div
+          style={{
+            color: "#94a3b8",
+            fontSize: "0.75rem",
+            marginBottom: "0.25rem",
+          }}
+        >
+          {label}
+        </div>
+        <div
+          style={{ color: "#e2e8f0", fontSize: "0.95rem", fontWeight: "500" }}
+        >
+          {value}
         </div>
       </div>
     </div>

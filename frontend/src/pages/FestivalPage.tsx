@@ -11,11 +11,13 @@ import {
   useSecondaryMarketTickets,
   NFT_ABI,
 } from "@/hooks/useTicketManagement";
+import { useEventSignature } from "@/hooks/useEventSignature";
 import { Festival, Ticket } from "@/types";
 import toast from "react-hot-toast";
 import "../styles/festival-page.css";
 import { usePublicClient } from "wagmi";
 import deployedAddresses from "../../../deployedAddresses.json";
+import { fetchMetadata } from "@/services/ipfs";
 
 // FEST Token ABI for balance/allowance checks
 const FEST_TOKEN_ABI = [
@@ -220,35 +222,34 @@ const FESTIVAL_TICKET_TYPES: Record<
   "1": [
     {
       id: "vip",
-      name: "VIP Pass",
+      name: "Vé VIP",
       description:
-        "VIP access to all areas including backstage, VIP lounge, and premium seating",
+        "Truy cập VIP tất cả khu vực bao gồm hậu trường, phòng chờ VIP và ghế cao cấp",
       price: "100",
       icon: "👑",
       color: "linear-gradient(135deg, #FFD700 0%, #FFA500 100%)",
     },
     {
       id: "standard",
-      name: "Standard Ticket",
+      name: "Vé Thường",
       description:
-        "General admission to the festival with access to main stage and food areas",
+        "Vé phổ thông với quyền truy cập sân khấu chính và khu ẩm thực",
       price: "50",
       icon: "🎫",
       color: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
     },
     {
       id: "early-bird",
-      name: "Early Bird",
-      description:
-        "Discounted ticket for early supporters with standard access",
+      name: "Ưu Đãi Sớm",
+      description: "Vé giảm giá cho người mua sớm với quyền truy cập thường",
       price: "40",
       icon: "🐦",
       color: "linear-gradient(135deg, #f093fb 0%, #f5576c 100%)",
     },
     {
       id: "student",
-      name: "Student Pass",
-      description: "Special discounted rate for students with valid ID",
+      name: "Vé Sinh Viên",
+      description: "Giá ưu đãi đặc biệt cho sinh viên có thẻ hợp lệ",
       price: "35",
       icon: "🎓",
       color: "linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)",
@@ -257,33 +258,33 @@ const FESTIVAL_TICKET_TYPES: Record<
   "2": [
     {
       id: "premium",
-      name: "Premium Box",
+      name: "Hộp Cao Cấp",
       description:
-        "Private box with premium view, complimentary drinks, and exclusive access",
+        "Hộp riêng với tầm nhìn cao cấp, đồ uống miễn phí và quyền truy cập độc quyền",
       price: "150",
       icon: "🎭",
       color: "linear-gradient(135deg, #8B5CF6 0%, #6366F1 100%)",
     },
     {
       id: "orchestra",
-      name: "Orchestra Seat",
-      description: "Best seats in the orchestra section with perfect acoustics",
+      name: "Ghế Dàn Nhạc",
+      description: "Ghế tốt nhất trong khu vực dàn nhạc với âm thanh hoàn hảo",
       price: "80",
       icon: "🎼",
       color: "linear-gradient(135deg, #EC4899 0%, #F43F5E 100%)",
     },
     {
       id: "balcony",
-      name: "Balcony Seat",
-      description: "Elevated view from balcony section with good sound quality",
+      name: "Ghế Ban Công",
+      description: "Tầm nhìn cao từ khu ban công với chất lượng âm thanh tốt",
       price: "60",
       icon: "🎪",
       color: "linear-gradient(135deg, #10B981 0%, #059669 100%)",
     },
     {
       id: "student",
-      name: "Student Discount",
-      description: "Special rate for students with valid student ID",
+      name: "Giảm Giá Sinh Viên",
+      description: "Giá đặc biệt cho sinh viên có thẻ sinh viên hợp lệ",
       price: "45",
       icon: "🎓",
       color: "linear-gradient(135deg, #3B82F6 0%, #2563EB 100%)",
@@ -292,32 +293,34 @@ const FESTIVAL_TICKET_TYPES: Record<
   "3": [
     {
       id: "vip",
-      name: "VIP Beach Access",
-      description: "Exclusive beachfront area, private bar, and priority entry",
+      name: "VIP Vùng Biển",
+      description:
+        "Khu vực ven biển riêng biệt, quầy bar riêng, và ưu tiên vào cổng",
       price: "120",
       icon: "🏖️",
       color: "linear-gradient(135deg, #F59E0B 0%, #D97706 100%)",
     },
     {
       id: "general",
-      name: "General Admission",
-      description: "Access to all stages, food vendors, and beach areas",
+      name: "Vé Thường",
+      description:
+        "Truy cập tất cả sân khấu, quầy ăn uống, và khu vực bãi biển",
       price: "70",
       icon: "🎸",
       color: "linear-gradient(135deg, #06B6D4 0%, #0891B2 100%)",
     },
     {
       id: "day-pass",
-      name: "Day Pass",
-      description: "Single day access to festival grounds and activities",
+      name: "Vé 1 Ngày",
+      description: "Truy cập một ngày vào khu lễ hội và các hoạt động",
       price: "50",
       icon: "☀️",
       color: "linear-gradient(135deg, #F97316 0%, #EA580C 100%)",
     },
     {
       id: "group",
-      name: "Group Ticket (5+)",
-      description: "Special group rate for 5 or more people",
+      name: "Vé Nhóm (5+ người)",
+      description: "Giá ưu đãi cho nhóm từ 5 người trở lên",
       price: "45",
       icon: "👥",
       color: "linear-gradient(135deg, #8B5CF6 0%, #7C3AED 100%)",
@@ -328,32 +331,32 @@ const FESTIVAL_TICKET_TYPES: Record<
       id: "vip",
       name: "VIP Jazz Lounge",
       description:
-        "Exclusive VIP area with premium seating, complimentary drinks, and meet & greet with artists",
+        "Khu VIP độc quyền với ghế cao cấp, đồ uống miễn phí và gặp gỡ nghệ sĩ",
       price: "130",
       icon: "🎷",
       color: "linear-gradient(135deg, #1E3A8A 0%, #3B82F6 100%)",
     },
     {
       id: "standard",
-      name: "Standard Ticket",
+      name: "Vé Thường",
       description:
-        "General admission with access to all stages and performances",
+        "Vé phổ thông với quyền truy cập tất cả sân khấu và buổi biểu diễn",
       price: "65",
       icon: "🎺",
       color: "linear-gradient(135deg, #4B5563 0%, #6B7280 100%)",
     },
     {
       id: "student",
-      name: "Student Pass",
-      description: "Discounted rate for students with valid student ID",
+      name: "Vé Sinh Viên",
+      description: "Giá ưu đãi cho sinh viên có thẻ sinh viên hợp lệ",
       price: "45",
       icon: "🎓",
       color: "linear-gradient(135deg, #7C3AED 0%, #A78BFA 100%)",
     },
     {
       id: "early-bird",
-      name: "Early Bird",
-      description: "Special early bird pricing for advance purchases",
+      name: "Ưu Đãi Sớm",
+      description: "Giá ưu đãi đặc biệt khi mua trước",
       price: "55",
       icon: "🐦",
       color: "linear-gradient(135deg, #059669 0%, #10B981 100%)",
@@ -362,34 +365,34 @@ const FESTIVAL_TICKET_TYPES: Record<
   "5": [
     {
       id: "front-row",
-      name: "Front Row",
+      name: "Hàng Ghế Đầu",
       description:
-        "Closest to the stage, ultimate rock experience with premium sound",
+        "Gần sân khấu nhất, trải nghiệm rock đỉnh cao với âm thanh cao cấp",
       price: "180",
       icon: "🎸",
       color: "linear-gradient(135deg, #DC2626 0%, #EF4444 100%)",
     },
     {
       id: "mosh-pit",
-      name: "Mosh Pit",
+      name: "Khu Mosh Pit",
       description:
-        "Standing area near the stage for the ultimate rock concert experience",
+        "Khu vực đứng gần sân khấu cho trải nghiệm nhạc rock đỉnh cao",
       price: "120",
       icon: "🤘",
       color: "linear-gradient(135deg, #991B1B 0%, #DC2626 100%)",
     },
     {
       id: "general",
-      name: "General Admission",
-      description: "Standard standing area with great view and sound",
+      name: "Vé Thường",
+      description: "Khu vực đứng tiêu chuẩn với tầm nhìn và âm thanh tuyệt vời",
       price: "80",
       icon: "🎵",
       color: "linear-gradient(135deg, #4B5563 0%, #6B7280 100%)",
     },
     {
       id: "balcony",
-      name: "Balcony View",
-      description: "Elevated seating with panoramic view of the stage",
+      name: "Vị Trí Ban Công",
+      description: "Ghế ngồi cao với tầm nhìn toàn cảnh sân khấu",
       price: "100",
       icon: "🎪",
       color: "linear-gradient(135deg, #7C2D12 0%, #F97316 100%)",
@@ -398,33 +401,33 @@ const FESTIVAL_TICKET_TYPES: Record<
   "6": [
     {
       id: "vip",
-      name: "VIP Experience",
+      name: "Trải Nghiệm VIP",
       description:
-        "VIP area with premium sound, private bar, and exclusive access",
+        "Khu VIP với âm thanh cao cấp, quầy bar riêng và quyền truy cập độc quyền",
       price: "200",
       icon: "🎧",
       color: "linear-gradient(135deg, #7C3AED 0%, #A855F7 100%)",
     },
     {
       id: "premium",
-      name: "Premium Floor",
-      description: "Premium standing area close to the main stage",
+      name: "Khu Sàn Cao Cấp",
+      description: "Khu vực đứng cao cấp gần sân khấu chính",
       price: "150",
       icon: "💿",
       color: "linear-gradient(135deg, #6366F1 0%, #8B5CF6 100%)",
     },
     {
       id: "general",
-      name: "General Admission",
-      description: "Access to all stages and festival areas",
+      name: "Vé Thường",
+      description: "Truy cập tất cả sân khấu và khu vực lễ hội",
       price: "100",
       icon: "🎹",
       color: "linear-gradient(135deg, #3B82F6 0%, #60A5FA 100%)",
     },
     {
       id: "early-bird",
-      name: "Early Bird",
-      description: "Special pricing for early ticket purchases",
+      name: "Ưu Đãi Sớm",
+      description: "Giá đặc biệt khi mua vé sớm",
       price: "80",
       icon: "⚡",
       color: "linear-gradient(135deg, #F59E0B 0%, #FBBF24 100%)",
@@ -433,33 +436,33 @@ const FESTIVAL_TICKET_TYPES: Record<
   "7": [
     {
       id: "vip",
-      name: "VIP Cozy Corner",
+      name: "VIP Góc Ấm Cúng",
       description:
-        "Intimate VIP area with fireplace, premium seating, and complimentary hot drinks",
+        "Khu VIP ấm cúng với lò sưởi, ghế cao cấp và đồ uống nóng miễn phí",
       price: "90",
       icon: "🔥",
       color: "linear-gradient(135deg, #92400E 0%, #D97706 100%)",
     },
     {
       id: "standard",
-      name: "Standard Ticket",
-      description: "General admission to the acoustic performances",
+      name: "Vé Thường",
+      description: "Vé phổ thông cho các buổi biểu diễn acoustic",
       price: "50",
       icon: "🎵",
       color: "linear-gradient(135deg, #065F46 0%, #10B981 100%)",
     },
     {
       id: "student",
-      name: "Student Pass",
-      description: "Discounted rate for students",
+      name: "Vé Sinh Viên",
+      description: "Giá ưu đãi cho sinh viên",
       price: "35",
       icon: "🎓",
       color: "linear-gradient(135deg, #1E40AF 0%, #3B82F6 100%)",
     },
     {
       id: "couple",
-      name: "Couple Package",
-      description: "Special package for couples with romantic seating",
+      name: "Gói Đôi",
+      description: "Gói đặc biệt cho cặp đôi với ghế ngồi lãng mạn",
       price: "85",
       icon: "💑",
       color: "linear-gradient(135deg, #BE185D 0%, #EC4899 100%)",
@@ -468,33 +471,33 @@ const FESTIVAL_TICKET_TYPES: Record<
   "8": [
     {
       id: "vip",
-      name: "VIP Backstage",
+      name: "VIP Hậu Trường",
       description:
-        "VIP access with backstage pass, meet & greet, and exclusive merchandise",
+        "Truy cập VIP với quyền vào hậu trường, gặp gỡ và quà tặng độc quyền",
       price: "160",
       icon: "🎤",
       color: "linear-gradient(135deg, #1F2937 0%, #374151 100%)",
     },
     {
       id: "front-stage",
-      name: "Front Stage",
-      description: "Standing area right in front of the stage",
+      name: "Trước Sân Khấu",
+      description: "Khu vực đứng ngay trước sân khấu",
       price: "110",
       icon: "🎵",
       color: "linear-gradient(135deg, #7C2D12 0%, #DC2626 100%)",
     },
     {
       id: "general",
-      name: "General Admission",
-      description: "Access to all performances and areas",
+      name: "Vé Thường",
+      description: "Truy cập tất cả buổi diễn và khu vực",
       price: "75",
       icon: "🎧",
       color: "linear-gradient(135deg, #4B5563 0%, #6B7280 100%)",
     },
     {
       id: "student",
-      name: "Student Pass",
-      description: "Special rate for students",
+      name: "Vé Sinh Viên",
+      description: "Giá đặc biệt cho sinh viên",
       price: "50",
       icon: "🎓",
       color: "linear-gradient(135deg, #7C3AED 0%, #A78BFA 100%)",
@@ -503,33 +506,33 @@ const FESTIVAL_TICKET_TYPES: Record<
   "9": [
     {
       id: "vip",
-      name: "VIP Beachfront",
+      name: "VIP Mặt Biển",
       description:
-        "VIP area with beachfront view, private bar, and premium seating",
+        "Khu VIP với tầm nhìn ra biển, quầy bar riêng và ghế cao cấp",
       price: "140",
       icon: "🏖️",
       color: "linear-gradient(135deg, #F59E0B 0%, #FCD34D 100%)",
     },
     {
       id: "premium",
-      name: "Premium Ticket",
-      description: "Premium seating with great view of the stage",
+      name: "Vé Cao Cấp",
+      description: "Ghế ngồi cao cấp với tầm nhìn tuyệt vời ra sân khấu",
       price: "95",
       icon: "🎸",
       color: "linear-gradient(135deg, #D97706 0%, #F59E0B 100%)",
     },
     {
       id: "general",
-      name: "General Admission",
-      description: "Access to festival grounds and all stages",
+      name: "Vé Thường",
+      description: "Truy cập khu lễ hội và tất cả sân khấu",
       price: "65",
       icon: "🎵",
       color: "linear-gradient(135deg, #059669 0%, #10B981 100%)",
     },
     {
       id: "group",
-      name: "Group Ticket (4+)",
-      description: "Special group rate for 4 or more people",
+      name: "Vé Nhóm (4+ người)",
+      description: "Giá ưu đãi cho nhóm từ 4 người trở lên",
       price: "55",
       icon: "👥",
       color: "linear-gradient(135deg, #7C3AED 0%, #A78BFA 100%)",
@@ -538,33 +541,33 @@ const FESTIVAL_TICKET_TYPES: Record<
   "10": [
     {
       id: "vip",
-      name: "VIP Royal Box",
+      name: "VIP Hộp Hoàng Gia",
       description:
-        "Exclusive VIP box with premium view, complimentary refreshments, and royal treatment",
+        "Hộp VIP độc quyền với tầm nhìn cao cấp, đồ uống miễn phí và đối xử như hoàng gia",
       price: "170",
       icon: "👑",
       color: "linear-gradient(135deg, #78350F 0%, #B45309 100%)",
     },
     {
       id: "orchestra",
-      name: "Orchestra Seat",
-      description: "Best seats in the orchestra section with perfect acoustics",
+      name: "Ghế Dàn Nhạc",
+      description: "Ghế tốt nhất trong khu dàn nhạc với âm thanh hoàn hảo",
       price: "110",
       icon: "🎼",
       color: "linear-gradient(135deg, #1E40AF 0%, #3B82F6 100%)",
     },
     {
       id: "balcony",
-      name: "Balcony Seat",
-      description: "Elevated view from balcony section",
+      name: "Ghế Ban Công",
+      description: "Tầm nhìn cao từ khu ban công",
       price: "75",
       icon: "🎭",
       color: "linear-gradient(135deg, #4B5563 0%, #6B7280 100%)",
     },
     {
       id: "student",
-      name: "Student Pass",
-      description: "Discounted rate for students",
+      name: "Vé Sinh Viên",
+      description: "Giá ưu đãi cho sinh viên",
       price: "50",
       icon: "🎓",
       color: "linear-gradient(135deg, #7C3AED 0%, #A78BFA 100%)",
@@ -589,7 +592,7 @@ const FESTIVAL_BANNERS: Record<string, string> = {
   "10": "/hue-banner.jpg", // Classical Music Night Huế
 };
 
-// Festival descriptions
+// Festival descriptions (also aliased as FESTIVAL_DETAILS for consistency)
 const FESTIVAL_DESCRIPTIONS: Record<
   string,
   { description: string; features: string[]; location: string; date: string }
@@ -716,6 +719,9 @@ const FESTIVAL_DESCRIPTIONS: Record<
   },
 };
 
+// Alias for backward compatibility
+const FESTIVAL_DETAILS = FESTIVAL_DESCRIPTIONS;
+
 export function FestivalPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -740,8 +746,51 @@ export function FestivalPage() {
     image: null as File | null,
   });
 
+  // NEW: Track if user has signed event connection
+  const [hasSignedEventConnection, setHasSignedEventConnection] =
+    useState(false);
+  const signEventConnection = useEventSignature();
+
   const buyTicketMutation = useBuyTicket();
   const buySecondaryMutation = useBuySecondaryTicket();
+
+  // Handler for signing event connection
+  const handleSignEventConnection = async () => {
+    if (!buyerAddress || !festival) {
+      toast.error("Vui lòng kết nối ví trước");
+      return;
+    }
+
+    const eventDetails = FESTIVAL_DETAILS[id || "1"] || {
+      location: "Unknown Location",
+      date: "TBD",
+    };
+
+    // Parse date string to timestamp
+    const dateParts = eventDetails.date.split(".");
+    const eventDate = new Date(
+      parseInt(`20${dateParts[2]}`),
+      parseInt(dateParts[1]) - 1,
+      parseInt(dateParts[0])
+    ).getTime();
+
+    try {
+      await signEventConnection.mutateAsync({
+        eventId: id || "1",
+        eventName: festival.name,
+        eventDate: eventDate,
+        location: eventDetails.location,
+        nftContract: festival.nftContract,
+        userAddress: buyerAddress,
+        timestamp: Date.now(),
+      });
+
+      setHasSignedEventConnection(true);
+      toast.success("✅ Bạn đã được xác nhận tham gia sự kiện!");
+    } catch (error) {
+      console.error("Failed to sign event connection:", error);
+    }
+  };
 
   const { data: festival, isLoading } = useQuery({
     queryKey: ["festival", id],
@@ -759,9 +808,13 @@ export function FestivalPage() {
   }, [id]);
 
   // Fetch real secondary market tickets from blockchain (include own tickets)
+  // Use the NFT contract address from the current festival
+  const currentFestivalNftAddress =
+    festival?.nftContract || DEPLOYED_NFT_ADDRESS;
+
   const { data: blockchainSecondaryTickets, isLoading: isLoadingSecondary } =
     useSecondaryMarketTickets(
-      DEPLOYED_NFT_ADDRESS,
+      currentFestivalNftAddress,
       undefined // Don't exclude any tickets - show all including own
     );
 
@@ -769,31 +822,100 @@ export function FestivalPage() {
     buyerAddress || smartAccountAddress
   )?.toLowerCase();
 
-  // Transform blockchain tickets to UI format
-  const secondaryTickets = React.useMemo(() => {
-    if (
-      !blockchainSecondaryTickets ||
-      blockchainSecondaryTickets.length === 0
-    ) {
-      // Fallback to mock data if no real tickets
-      return mockSecondaryTickets;
-    }
+  // Transform blockchain tickets to UI format and filter by current event
+  const [secondaryTickets, setSecondaryTickets] = React.useState<any[]>([]);
 
-    return blockchainSecondaryTickets.map((ticket) => ({
-      id: ticket.tokenId.toString(),
-      tokenId: ticket.tokenId,
-      tokenURI: ticket.tokenURI,
-      purchasePrice: (
-        BigInt(ticket.purchasePrice) / BigInt(10 ** 18)
-      ).toString(),
-      sellingPrice: (BigInt(ticket.sellingPrice) / BigInt(10 ** 18)).toString(),
-      isForSale: ticket.isForSale,
-      owner: ticket.owner,
-      isGifted: ticket.isGifted,
-      isVerified: ticket.isVerified,
-      festival: mockFestival,
-    }));
-  }, [blockchainSecondaryTickets]);
+  React.useEffect(() => {
+    const parseTickets = async () => {
+      if (
+        !blockchainSecondaryTickets ||
+        blockchainSecondaryTickets.length === 0
+      ) {
+        setSecondaryTickets([]);
+        return;
+      }
+
+      const currentEventId = id || "1";
+
+      // Parse each ticket and extract eventId, eventName, and ticketType from metadata
+      const parsedTickets = await Promise.all(
+        blockchainSecondaryTickets.map(async (ticket) => {
+          let ticketEventId = currentEventId;
+          let ticketEventName = festival?.name || "Unknown Event";
+          let ticketTypeName = "Standard";
+
+          try {
+            const metadata = await fetchMetadata(ticket.tokenURI);
+            if (metadata?.description) {
+              // Parse Event ID: X
+              const eventIdMatch =
+                metadata.description.match(/Event ID: (\d+)/);
+              if (eventIdMatch && eventIdMatch[1]) {
+                ticketEventId = eventIdMatch[1];
+              }
+
+              // Parse Event: Event Name
+              const eventNameMatch =
+                metadata.description.match(/Event: ([^\n]+)/);
+              if (eventNameMatch && eventNameMatch[1]) {
+                ticketEventName = eventNameMatch[1].trim();
+              }
+
+              // Parse Ticket Type: Type Name
+              const ticketTypeMatch = metadata.description.match(
+                /Ticket Type: ([^\n]+)/
+              );
+              if (ticketTypeMatch && ticketTypeMatch[1]) {
+                ticketTypeName = ticketTypeMatch[1].trim();
+              }
+            }
+
+            // Also try to get from metadata.name if available
+            if (metadata?.name && !ticketTypeName) {
+              ticketTypeName = metadata.name;
+            }
+          } catch (e) {
+            console.warn("Error parsing ticket metadata:", e);
+          }
+
+          return {
+            id: ticket.tokenId.toString(),
+            tokenId: ticket.tokenId,
+            tokenURI: ticket.tokenURI,
+            purchasePrice: (
+              BigInt(ticket.purchasePrice) / BigInt(10 ** 18)
+            ).toString(),
+            sellingPrice: (
+              BigInt(ticket.sellingPrice) / BigInt(10 ** 18)
+            ).toString(),
+            isForSale: ticket.isForSale,
+            owner: ticket.owner,
+            isGifted: ticket.isGifted,
+            isVerified: ticket.isVerified,
+            festival: festival || mockFestival,
+            eventId: ticketEventId,
+            eventName: ticketEventName,
+            ticketTypeName: ticketTypeName, // Add ticket type name
+          };
+        })
+      );
+
+      // Filter tickets that match current event ID
+      const filtered = parsedTickets.filter(
+        (ticket) => ticket.eventId === currentEventId
+      );
+
+      console.log(
+        "🎫 Filtered secondary tickets for event",
+        currentEventId,
+        ":",
+        filtered.length
+      );
+      setSecondaryTickets(filtered);
+    };
+
+    parseTickets();
+  }, [blockchainSecondaryTickets, id, festival]);
 
   const secondaryTicketsForSale = React.useMemo(() => {
     return secondaryTickets.filter((ticket) => ticket.isForSale);
@@ -902,6 +1024,28 @@ export function FestivalPage() {
     });
 
     try {
+      // Get event details for metadata
+      const eventDetails = FESTIVAL_DETAILS[id || "1"] || {
+        location: "Unknown Location",
+        date: "TBD",
+      };
+
+      // Parse date string to timestamp
+      const dateParts = eventDetails.date.split(".");
+      const eventDate = new Date(
+        parseInt(`20${dateParts[2]}`),
+        parseInt(dateParts[1]) - 1,
+        parseInt(dateParts[0])
+      ).getTime();
+
+      // Get ticket type name (Vietnamese) from ID
+      const selectedTicketInfo = currentTicketTypes.find(
+        (t) => t.id === selectedTicketType
+      );
+      const ticketTypeName = selectedTicketInfo
+        ? selectedTicketInfo.name
+        : selectedTicketType;
+
       const result = await buyTicketMutation.mutateAsync({
         nftAddress: festival.nftContract,
         marketplaceAddress: festival.marketplace,
@@ -912,6 +1056,14 @@ export function FestivalPage() {
           name: ticketData.name,
           description: ticketData.description,
           image: imageFile,
+        },
+        // NEW: Pass event metadata for EIP-712 signing
+        eventMetadata: {
+          eventId: id || "1",
+          eventName: festival.name,
+          eventDate: eventDate,
+          location: eventDetails.location,
+          ticketType: ticketTypeName,
         },
       });
       console.log("✅ Ticket purchased successfully:", result);
@@ -1237,25 +1389,78 @@ export function FestivalPage() {
                     ))}
                   </div>
 
-                  <button
-                    onClick={() => setShowBuyModal(true)}
-                    className="btn-primary"
-                    style={{
-                      width: "100%",
-                      fontSize: "16px",
-                      padding: "14px",
-                      background:
-                        "linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%)",
-                      boxShadow: "0 4px 20px rgba(99, 102, 241, 0.4)",
-                    }}
-                  >
-                    🎟️ Chọn hạng vé
-                  </button>
+                  {/* Show sign connection button first if not signed */}
+                  {!hasSignedEventConnection ? (
+                    <button
+                      onClick={handleSignEventConnection}
+                      className="btn-primary"
+                      disabled={!buyerAddress || signEventConnection.isPending}
+                      style={{
+                        width: "100%",
+                        fontSize: "16px",
+                        padding: "14px",
+                        background: buyerAddress
+                          ? "linear-gradient(135deg, #f093fb 0%, #f5576c 100%)"
+                          : "rgba(255, 255, 255, 0.1)",
+                        boxShadow: buyerAddress
+                          ? "0 4px 20px rgba(240, 147, 251, 0.4)"
+                          : "none",
+                        cursor: buyerAddress ? "pointer" : "not-allowed",
+                        opacity: !buyerAddress ? 0.5 : 1,
+                      }}
+                    >
+                      {!buyerAddress
+                        ? "⚠️ Vui lòng kết nối ví"
+                        : signEventConnection.isPending
+                        ? "🔐 Đang xác nhận..."
+                        : "🔐 Ký xác nhận tham gia sự kiện"}
+                    </button>
+                  ) : (
+                    <>
+                      <div
+                        style={{
+                          padding: "12px",
+                          background: "rgba(34, 197, 94, 0.1)",
+                          border: "1px solid rgba(34, 197, 94, 0.3)",
+                          borderRadius: "8px",
+                          marginBottom: "12px",
+                          display: "flex",
+                          alignItems: "center",
+                          gap: "8px",
+                        }}
+                      >
+                        <span style={{ fontSize: "18px" }}>✅</span>
+                        <span
+                          style={{
+                            fontSize: "14px",
+                            color: "#22c55e",
+                            fontWeight: "500",
+                          }}
+                        >
+                          Đã xác nhận tham gia sự kiện
+                        </span>
+                      </div>
+                      <button
+                        onClick={() => setShowBuyModal(true)}
+                        className="btn-primary"
+                        style={{
+                          width: "100%",
+                          fontSize: "16px",
+                          padding: "14px",
+                          background:
+                            "linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%)",
+                          boxShadow: "0 4px 20px rgba(99, 102, 241, 0.4)",
+                        }}
+                      >
+                        🎟️ Chọn hạng vé
+                      </button>
+                    </>
+                  )}
                 </div>
               </div>
 
               {/* Organizer Info */}
-              <div
+              {/* <div
                 style={{
                   padding: "16px",
                   backgroundColor: "rgba(255, 255, 255, 0.03)",
@@ -1276,7 +1481,7 @@ export function FestivalPage() {
                 >
                   {festival.organiser}
                 </div>
-              </div>
+              </div> */}
             </div>
           </div>
         </div>
@@ -1285,7 +1490,32 @@ export function FestivalPage() {
       {/* Secondary Market Tickets Section */}
       <div className="festival-page-container" style={{ marginTop: "24px" }}>
         <div className="card mb-3">
-          <h2 className="card-title">Vé đang bán lại</h2>
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              marginBottom: "16px",
+            }}
+          >
+            <h2 className="card-title" style={{ margin: 0 }}>
+              Vé đang bán lại
+            </h2>
+            {secondaryTicketsForSale.length > 0 && (
+              <button
+                onClick={() => navigate(`/secondary-market/${id}`)}
+                className="btn-primary"
+                style={{
+                  padding: "8px 16px",
+                  fontSize: "14px",
+                  background:
+                    "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
+                }}
+              >
+                Xem tất cả →
+              </button>
+            )}
+          </div>
           <div className="card-content">
             {isLoadingSecondary ? (
               <div style={{ padding: "16px 0", color: "#888" }}>
@@ -1394,6 +1624,44 @@ function TicketCard({
           ✅ Vé của bạn
         </div>
       )}
+      {/* Ticket Type Badge */}
+      {(ticket as any).ticketTypeName && (
+        <div
+          style={{
+            marginBottom: "12px",
+            padding: "8px 12px",
+            background:
+              "linear-gradient(135deg, rgba(102, 126, 234, 0.2) 0%, rgba(118, 75, 162, 0.2) 100%)",
+            border: "1px solid rgba(102, 126, 234, 0.3)",
+            borderRadius: "8px",
+            fontSize: "13px",
+            fontWeight: "600",
+            color: "#a78bfa",
+            textAlign: "center",
+          }}
+        >
+          🎫 {(ticket as any).ticketTypeName}
+        </div>
+      )}
+
+      {/* Event Name Badge */}
+      {(ticket as any).eventName && (
+        <div
+          style={{
+            marginBottom: "12px",
+            padding: "6px 10px",
+            background: "rgba(59, 130, 246, 0.1)",
+            border: "1px solid rgba(59, 130, 246, 0.2)",
+            borderRadius: "6px",
+            fontSize: "12px",
+            color: "#60a5fa",
+            textAlign: "center",
+          }}
+        >
+          🎭 {(ticket as any).eventName}
+        </div>
+      )}
+
       <div
         style={{
           position: "relative",

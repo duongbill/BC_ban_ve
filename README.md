@@ -271,6 +271,8 @@ node scripts/update-env.js
 
 - **Tích hợp Web3**: Kết nối với MetaMask qua RainbowKit
 - **Wagmi v2**: React hooks cho blockchain interactions
+- **EIP-712 Signing**: Ký xác nhận tham gia sự kiện với metadata rõ ràng trong MetaMask
+- **Event-Specific Metadata**: Mỗi transaction chứa đầy đủ thông tin sự kiện
 - **Mock IPFS**: Local testing không cần API key
 - **Mock Data**: Dữ liệu demo cho festivals và tickets (có thể thay bằng API thật)
 - **Blockchain Query**: Vé đã mua được fetch trực tiếp từ smart contract

@@ -34,6 +34,20 @@ export async function uploadMetadata(data: UploadMetadataParams): Promise<string
         const mockUri = `ipfs://${mockHash}`;
 
         console.log("Mock IPFS URI:", mockUri);
+        
+        // Store metadata in localStorage for retrieval (mock IPFS storage)
+        try {
+            const metadata = {
+                name: data.name,
+                description: data.description,
+                image: "mock-image-url", // Can't store File in localStorage
+                attributes: data.attributes || [],
+            };
+            localStorage.setItem(`ipfs_metadata_${mockHash}`, JSON.stringify(metadata));
+            console.log("✅ Stored metadata in localStorage for:", mockHash);
+        } catch (e) {
+            console.warn("Failed to store metadata in localStorage:", e);
+        }
 
         // Simulate network delay
         await new Promise((resolve) => setTimeout(resolve, 1000));
@@ -87,6 +101,23 @@ export async function uploadImage(image: File): Promise<string> {
  * @returns Promise<TicketMetadata> The metadata object
  */
 export async function fetchMetadata(uri: string): Promise<TicketMetadata> {
+    // Mock mode - try to fetch from localStorage first
+    if (USE_MOCK && uri.startsWith("ipfs://")) {
+        const hash = uri.replace("ipfs://", "");
+        const stored = localStorage.getItem(`ipfs_metadata_${hash}`);
+        if (stored) {
+            console.log("📦 Retrieved metadata from localStorage for:", hash);
+            return JSON.parse(stored);
+        }
+        console.warn("⚠️ No metadata found in localStorage for:", hash);
+        // Return minimal metadata if not found
+        return {
+            name: "Unknown Ticket",
+            description: "Metadata not available",
+            image: "",
+        };
+    }
+    
     try {
         // Convert IPFS URI to HTTP gateway URL if needed
         const httpUrl = uri.startsWith("ipfs://") ? `https://${uri.slice(7)}.ipfs.nftstorage.link` : uri;

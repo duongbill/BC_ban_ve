@@ -28,22 +28,18 @@ async function main() {
   const festTokenAddress = await festToken.getAddress();
   console.log("   ✅ FestToken deployed to:", festTokenAddress);
 
-  // Mint tokens to deployer and organiser
+  // Mint tokens to ALL Hardhat accounts (0-19) for testing
   const mintAmount = hre.ethers.parseEther("10000");
-  console.log("   💵 Minting 10,000 FEST to deployer...");
-  await festToken.mint(deployer.address, mintAmount);
-  console.log("   💵 Minting 10,000 FEST to organiser...");
-  await festToken.mint(organiser, mintAmount);
+  console.log("   💵 Minting 10,000 FEST to ALL accounts (0-19)...");
 
-  // Mint tokens to Hardhat accounts #10-#19 (useful for secondary market testing)
-  console.log("   💵 Minting 10,000 FEST to accounts #10-#19...");
-  for (let i = 10; i <= 19; i++) {
+  for (let i = 0; i < Math.min(20, signers.length); i++) {
     const addr = signers[i]?.address;
     if (addr) {
       await festToken.mint(addr, mintAmount);
+      console.log(`      Account #${i}: ${addr} ✅`);
     }
   }
-  console.log("   ✅ Tokens minted\n");
+  console.log("   ✅ Tokens minted to all accounts\n");
 
   // 2. Deploy Factory
   console.log("2️⃣  Deploying FestiveTicketsFactory...");
